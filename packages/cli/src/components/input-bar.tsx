@@ -8,9 +8,16 @@ import { TextareaRenderable } from "@opentui/core";
 import type { Command } from "./command-menu/types";
 import { useCommandMenu } from "./command-menu/use-command-menu";
 import {  MAX_VISIBLE_ITEMS } from "./command-menu";
+import { useToast } from "../providers/toast";
+import { useKeyboardLayer } from "../providers/keyboard-layer";
+import { text } from "node:stream/consumers";
+import { useDialog } from "../providers/dialog";
+import { useTheme } from "../providers/theme";
+
 type Props = {
   onSubmit: (text: string) => void;
   disabled?: boolean;
+  fixedWidth?: number | undefined;
 };
 
 export const TEXTAREA_KEY_BINDINGS: KeyBinding[] =[
@@ -20,10 +27,14 @@ export const TEXTAREA_KEY_BINDINGS: KeyBinding[] =[
   {name: "enter", shift: true, action: "newline"},
 ]
 
-export function InputBar({ onSubmit, disabled = false,}: Props) {
+export function InputBar({ onSubmit, disabled = false, fixedWidth, }: Props) {
   const textareaRef = useRef<TextareaRenderable>(null);
   const onSubmitRef  = useRef<() =>void>(() => {});
   const renderer = useRenderer();
+  const toast = useToast()
+  const dialog = useDialog();
+  const {isTopLayer, setResponder} = useKeyboardLayer();
+  const {colors} = useTheme()
 
   const {
     showCommandMenu,
@@ -70,12 +81,14 @@ const handleCommandExecute = useCallback((index: number) => {
     if(command.action) {
       command.action({
         exit: () =>renderer.destroy(),
+        toast,
+        dialog,
       });
     } else {
       textarea.insertText(command.value + " ");
     }
 
-  },[renderer])
+  },[renderer, toast]);
  
   // wire up textarea submit handler once  so it alwasy read the latest state.
   useEffect(() => {
@@ -98,18 +111,35 @@ const handleCommandExecute = useCallback((index: number) => {
     handleSubmit();
   };
 
-  
+  // Register the base layer responder for ctrl+c dismissal
+  useEffect(() => {
+    setResponder("base", () => {
+      if(disabled) return false;
+
+      const textarea = textareaRef.current;
+      if(textarea && textarea.plainText.length > 0) {
+        textarea.setText("");
+        return true;
+      }
+      return false;
+    });
+
+    return () => setResponder("base", null);
+  },[disabled, setResponder]);
+
   return (
-    <box width="100%" alignItems="center">
+    <box alignItems="center">
       <box
         border={["left"]}
-        borderColor="cyan"
+        borderColor={colors.primary}
         customBorderChars={{
           ...EmptyBorder,
           vertical: "┃",
           bottomLeft: "╹",
         }}
-        width="100%"
+        width={60}
+        minWidth={40}
+        alignSelf="center"
       >
 
       <box
@@ -117,8 +147,7 @@ const handleCommandExecute = useCallback((index: number) => {
         justifyContent="center"
         paddingX={2}
         paddingY={1}
-        backgroundColor="#1A1A24"
-        width="100%"
+        backgroundColor={colors.surface}
         gap={1}
       >
         {showCommandMenu && (
@@ -126,11 +155,10 @@ const handleCommandExecute = useCallback((index: number) => {
           position="absolute"
           bottom="100%"
           left={0}
-          width="100%"
           minWidth={50}
           height={MAX_VISIBLE_ITEMS}
           overflow="hidden"
-          backgroundColor="#1A1A24"
+          backgroundColor={colors.surface}
           zIndex={10}
           >
             <CommandMenu
@@ -144,8 +172,9 @@ const handleCommandExecute = useCallback((index: number) => {
           </box>
         )}
         <textarea
-        ref={textareaRef}
-          focused={!disabled}
+          ref={textareaRef}
+          flexShrink={0}
+          focused={!disabled && (isTopLayer("base") || isTopLayer("command"))}
           keyBindings={TEXTAREA_KEY_BINDINGS}
           onContentChange={handleTextareaContentChange}
           placeholder='Ask anything... "Fix a bug in the database"'

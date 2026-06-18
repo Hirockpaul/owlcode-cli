@@ -2,6 +2,9 @@ import type { RefObject } from "react";
 import { TextAttributes, type ScrollBoxRenderable } from "@opentui/core";
 import { getFilteredCommands } from "./filter-commands";
 import { COMMANDS } from "./commands";
+import { useTheme } from "../../providers/theme";
+import { color } from "bun";
+
 
 export const MAX_VISIBLE_ITEMS = 8;
 
@@ -22,6 +25,7 @@ export function CommandMenu({
     onSelect,
     onExecute,
 }: CommandMenuProps) {
+    const {colors } = useTheme()
     const filtered = getFilteredCommands(query);
     const padCount = Math.max(0, MAX_VISIBLE_ITEMS - filtered.length);
 
@@ -49,7 +53,7 @@ export function CommandMenu({
                                 flexDirection="row"
                                 paddingX={1}
                                 overflow="hidden"
-                                backgroundColor={isSelected ? "#89B4FA" : undefined}
+                                backgroundColor={isSelected ? colors.selection : undefined}
                                 onMouseMove={() => onSelect(i)}
                                 onMouseDown={() => onExecute(i)}
                             >

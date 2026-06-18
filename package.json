@@ -5,6 +5,8 @@
   "scripts": {
     "dev": "bun run --watch packages/cli/src/index.tsx",
     "dev:cli": "cd packages/cli && bun run dev"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.3"
   }
-
 }

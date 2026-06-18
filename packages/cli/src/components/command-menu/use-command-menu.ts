@@ -3,6 +3,7 @@ import { ScrollBoxRenderable } from "@opentui/core";
 import { useKeyboard } from "@opentui/react";
 import { getFilteredCommands } from "./filter-commands";
 import type { Command } from "./types";
+import {useKeyboardLayer} from "../../providers/keyboard-layer";
 
 type UseCommandMenuReturn = {
     showCommandMenu: boolean;
@@ -19,15 +20,19 @@ export function useCommandMenu(): UseCommandMenuReturn {
     const [selectedIndex, setSelectedIndex] = useState(0);
     const [showCommandMenu, setShowCommandMenu] = useState(false);
     const scrollRef = useRef<ScrollBoxRenderable>(null) as RefObject<ScrollBoxRenderable>;
+    const {push, pop, isTopLayer} = useKeyboardLayer();
 
     const commandQuery = showCommandMenu && textValue.startsWith("/")
-        ? textValue.slice(1)
-        : "";
+        ? textValue.slice(1) : "";
 
     const filteredCommands = useMemo(
         () => getFilteredCommands(commandQuery),
-        [commandQuery]
-    );
+        [commandQuery] );
+
+    const close = () => {
+        setShowCommandMenu(false);
+        pop("command");
+    };
 
     const handleContentChange = useCallback((text: string) => {
         setTextValue(text);
@@ -42,8 +47,12 @@ export function useCommandMenu(): UseCommandMenuReturn {
         const prefix = text.startsWith("/") ? text.slice(1) : null;
         if (prefix != null && !prefix.includes(" ")) {
             setShowCommandMenu(true);
+            push ("command", () => {
+              close();
+                return true;
+            });
         } else {
-            setShowCommandMenu(false);
+           close();
         }
     }, []);
 
@@ -51,18 +60,18 @@ export function useCommandMenu(): UseCommandMenuReturn {
     const resolveCommand = useCallback((index: number): Command | undefined => {
         const command = filteredCommands[index];
         if (command) {
-            setShowCommandMenu(false);
+          close();
         }
         return command;
     }, [filteredCommands]);
 
     // Arrow keys move selection; the list follows along when the highlight goes off-screen
     useKeyboard((key) => {
-        if (!showCommandMenu) return;
+        if (!showCommandMenu || !isTopLayer("command")) return;
 
         if (key.name === "escape") {
             key.preventDefault();
-            setShowCommandMenu(false);
+           close();
         } else if (key.name === "up") {
             key.preventDefault();
             setSelectedIndex((i: number) => {
