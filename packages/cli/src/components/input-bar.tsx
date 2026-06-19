@@ -88,7 +88,7 @@ const handleCommandExecute = useCallback((index: number) => {
       textarea.insertText(command.value + " ");
     }
 
-  },[renderer, toast]);
+  },[renderer, toast, dialog]);
  
   // wire up textarea submit handler once  so it alwasy read the latest state.
   useEffect(() => {

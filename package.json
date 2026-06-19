@@ -8,5 +8,8 @@
   },
   "devDependencies": {
     "typescript": "^6.0.3"
+  },
+  "dependencies": {
+    "opentui-spinner": "^0.0.7"
   }
 }

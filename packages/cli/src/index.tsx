@@ -1,50 +1,29 @@
 import { createCliRenderer } from "@opentui/core";
 import { createRoot } from "@opentui/react";
-import { Header } from "./components/header";
-import { ToastProvider } from "./providers/toast";
-import { InputBar } from "./components/input-bar";
-import { KeyboardLayerProvider } from "./providers/keyboard-layer";
-import { DialogProvider } from "./providers/dialog";
-import { ThemeProvider, useTheme } from "./providers/theme";
+import { createMemoryRouter, RouterProvider } from "react-router";
+import { RootLayout } from "./layouts/root-layout";
+import { Home } from "./screen/home";
+import { NewSession } from "./screen/new-session";
+import { Session } from "./screen/session"; 
 
-function ThemedRoot() {
-  const { colors } = useTheme();
-
-  return (
-    <box
-      alignItems="center"
-      justifyContent="center"
-      backgroundColor={colors.background}
-      width="100%"
-      height="100%"
-      gap={2}
-    >
-      <Header />
-      <box>
-        <InputBar onSubmit={() => {}} />
-      </box>
-    </box>
-  );
-}
+const router = createMemoryRouter([
+  {
+    path: "/",
+    element: <RootLayout />,
+    children: [
+      { index: true, element: <Home /> },
+      { path: "sessions/new", element: <NewSession/> },
+      { path: "sessions/:id", element: <Session/> },
+    ]
+  }
+]);
 
 function App() {
-  return (
-    <ThemeProvider>
-      <KeyboardLayerProvider>
-        <DialogProvider>
-          <ToastProvider>
-            <ThemedRoot />
-          </ToastProvider>
-        </DialogProvider>
-      </KeyboardLayerProvider>
-    </ThemeProvider>
-  );
+  return <RouterProvider router={router} />
 }
 
-(async () => {
-  const renderer = await createCliRenderer({
-    targetFps: 60,
-    exitOnCtrlC: false,
-  });
-  createRoot(renderer).render(<App />);
-})();
+const renderer = await createCliRenderer({
+  targetFps: 60,
+  exitOnCtrlC: false,
+});
+createRoot(renderer).render(<App />);
