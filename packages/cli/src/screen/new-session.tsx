@@ -1,13 +1,12 @@
 import { useEffect, useMemo, useRef } from "react";
-import {json, z} from "zod";
+import { z } from "zod";
 import { DEFAULT_CHAT_MODEL_ID } from "@owlcode/shared";
 import { useNavigate, useLocation } from "react-router";
-import { UserMessage,  ErrorMessage } from "../components/messages";
+import { UserMessage } from "../components/messages";
 import { SessionShell } from "../components/session-shell";
 import { useToast } from "../providers/toast";
 import { apiClient } from "../lib/api-client";
 import { getErrorMessage } from "../lib/http-errors";
-import { title } from "node:process";
 
 const newSessionStateSchema = z.object({
   message : z.string(),
@@ -16,7 +15,7 @@ const newSessionStateSchema = z.object({
 export function NewSession () {
   const navigate = useNavigate();
   const location = useLocation();
-  const toast = useToast();
+  const { show: showToast } = useToast();
   const hasStarteRef = useRef(false)
   
  const state = useMemo(() => {
@@ -57,41 +56,18 @@ export function NewSession () {
         if(!res.ok) {
           throw new Error (await getErrorMessage(res));
         }
-        interface Message {
-          id: string;
-          role: string;
-          title: string;
-          content: string;
-          mode: string;
-          model: string;
-          status: string;
-          parts: null;
-          duration: null;
-          createdAt: string;
-          sessionId: string;
-        }
+        const session = await res.json();
 
-        interface Session {
-          id: string;
-          title: string;
-          cwd: string | null;
-          userId: string;
-          createdAt: string;
-          messages: Message[];
-        }
-
-        const Session = (await res.json()) as Session;
-
-        navigate(`/sessions/${Session.id}`, {
+        navigate(`/sessions/${session.id}`, {
           replace: true,
-          state: { Session },
+          state: { session },
         });
       
       } catch (error) {
         if(ignore) return;
-        toast.show({
+        showToast({
           variant:"error",
-          message:error instanceof Error ? error.message:"Faild to createtrue session",
+          message:error instanceof Error ? error.message:"Failed to create session",
         });
         navigate("/", {replace : true})
         }
@@ -100,7 +76,7 @@ export function NewSession () {
     return () => {
       ignore = true;
     };
-  },[]);
+  },[navigate, showToast, state]);
   if (!state) return null
 
   return (
