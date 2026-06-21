@@ -1,0 +1,20 @@
+{
+    "name": "@owlcode/server",
+    "type": "module",
+    "private": "true",
+    "exports": {
+        ".": "./src/index.ts"
+    },
+    "scripts": {
+        "dev": "bun run --hot src/index.ts"
+    },
+    "dependencies": {
+        "@hono/zod-validator": "^0.8.0",
+        "@owlcode/shared": "workspace:*",
+        "hono": "^4.12.26",
+        "zod": "^4.4.3"
+    }
+    ,"devDependencies": {
+        "@types/node": "^20.6.1"
+    }
+}
