@@ -1,4 +1,4 @@
-import { createContext, useContext,useRef,useState,useCallback } from "react";
+import { createContext, useContext,useRef,useState,useCallback, useMemo } from "react";
 import type { ReactNode } from "react";
 import { useTerminalDimensions } from "@opentui/react";
 import type { ToastOptions, ToastVariant } from "./types";
@@ -25,12 +25,12 @@ type ToastProviderProps = {
 };
 
 export function ToastProvider({children} : ToastProviderProps) {
-    const[currentToast, setCurrentToast] = useState<ToastOptions |null>(null);
+    const [currentToast, setCurrentToast] = useState<ToastOptions | null>(null);
     const timeoutHandleRef = useRef<NodeJS.Timeout | null>(null);
 
     const clearCurrentTimeout = useCallback(() => {
-        if(timeoutHandleRef.current) {
-            clearTimeout(timeoutHandleRef.current);
+        if (timeoutHandleRef.current) {
+            clearTimeout(timeoutHandleRef.current as unknown as number);
             timeoutHandleRef.current = null;
         }
     }, []);
@@ -47,21 +47,22 @@ export function ToastProvider({children} : ToastProviderProps) {
 
         timeoutHandleRef.current = setTimeout(() => {
             setCurrentToast(null);
-        }, duration).unref();
+        }, duration);
 
-        
-},[clearCurrentTimeout] )
-  
-const value : ToastContextValue = {    
-    show,
-};
+        // call unref if available (NodeJS timers)
+        try {
+            (timeoutHandleRef.current as any)?.unref?.();
+        } catch {}
+    }, [clearCurrentTimeout]);
 
-return (
-    <ToastContext.Provider value={value}>
-        {children}
-        <Toast currentToast={currentToast} />
-    </ToastContext.Provider>
-);
+    const value = useMemo(() => ({ show }), [show]);
+
+    return (
+        <ToastContext.Provider value={value}>
+            {children}
+            <Toast currentToast={currentToast} />
+        </ToastContext.Provider>
+    );
 }
 
 type ToastProps = {
@@ -86,7 +87,7 @@ function Toast({currentToast} : ToastProps) {
         ? variantColors[currentToast.variant]
         : variantColors.info;
 
-        return (
+    return (
             <box
                 position="absolute"
                 justifyContent="center"
@@ -110,5 +111,5 @@ function Toast({currentToast} : ToastProps) {
                     </text>
                 </box>
             </box>
-        )
-};
+        );
+    }

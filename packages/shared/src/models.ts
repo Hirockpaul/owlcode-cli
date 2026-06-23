@@ -3,7 +3,9 @@ export type ModelPricing = {
   outputUsdPerMillionTokens: number;
 };
 
-export type SupportedProvider = "anthropic" | "openai";
+export type SupportedProvider =
+  | "google"
+  | "groq";
 
 type SupportedChatModelDefinition = {
   id: string;
@@ -12,61 +14,81 @@ type SupportedChatModelDefinition = {
 };
 
 export const SUPPORTED_CHAT_MODELS = [
+  // Google
   {
-    id: "claude-sonnet-4-6",
-    provider: "anthropic",
+  id: "gemini-3-flash-preview",
+  provider: "google",
+  pricing: {
+    inputUsdPerMillionTokens: 0,
+    outputUsdPerMillionTokens: 0,
+  },
+},
+
+  {
+    id: "gemini-2.5-flash",
+    provider: "google",
     pricing: {
-      inputUsdPerMillionTokens: 3,
-      outputUsdPerMillionTokens: 15,
+      inputUsdPerMillionTokens: 0,
+      outputUsdPerMillionTokens: 0,
     },
   },
   {
-    id: "claude-haiku-4-5",
-    provider: "anthropic",
+    id: "gemini-2.5-pro",
+    provider: "google",
     pricing: {
-      inputUsdPerMillionTokens: 1,
-      outputUsdPerMillionTokens: 5,
+      inputUsdPerMillionTokens: 0,
+      outputUsdPerMillionTokens: 0,
+    },
+  },
+
+  // Groq
+  {
+    id: "llama-3.3-70b-versatile",
+    provider: "groq",
+    pricing: {
+      inputUsdPerMillionTokens: 0,
+      outputUsdPerMillionTokens: 0,
     },
   },
   {
-    id: "claude-opus-4-6",
-    provider: "anthropic",
+    id: "deepseek-r1-distill-llama-70b",
+    provider: "groq",
     pricing: {
-      inputUsdPerMillionTokens: 5,
-      outputUsdPerMillionTokens: 25,
+      inputUsdPerMillionTokens: 0,
+      outputUsdPerMillionTokens: 0,
     },
   },
   {
-    id: "gpt-5.4",
-    provider: "openai",
-    pricing: {
-      inputUsdPerMillionTokens: 2.5,
-      outputUsdPerMillionTokens: 15,
-    },
+  id: "qwen-qwq-32b",
+  provider: "groq",
+  pricing: {
+    inputUsdPerMillionTokens: 0,
+    outputUsdPerMillionTokens: 0,
   },
-  {
-    id: "gpt-5.4-mini",
-    provider: "openai",
-    pricing: {
-      inputUsdPerMillionTokens: 0.75,
-      outputUsdPerMillionTokens: 4.5,
-    },
+},
+{
+  id: "meta-llama/llama-4-scout-17b-16e-instruct",
+  provider: "groq",
+  pricing: {
+    inputUsdPerMillionTokens: 0,
+    outputUsdPerMillionTokens: 0,
   },
-  {
-    id: "gpt-5.4-nano",
-    provider: "openai",
-    pricing: {
-      inputUsdPerMillionTokens: 0.2,
-      outputUsdPerMillionTokens: 1.25,
-    },
-  },
+},
 ] as const satisfies readonly SupportedChatModelDefinition[];
 
-export type SupportedChatModel = (typeof SUPPORTED_CHAT_MODELS)[number];
-export type SupportedChatModelId = SupportedChatModel["id"];
+export type SupportedChatModel =
+  (typeof SUPPORTED_CHAT_MODELS)[number];
 
-export function findSupportedChatModel(modelId: string) {
-  return SUPPORTED_CHAT_MODELS.find((model) => model.id === modelId);
+export type SupportedChatModelId =
+  SupportedChatModel["id"];
+
+export function findSupportedChatModel(
+  modelId: string
+) {
+  return SUPPORTED_CHAT_MODELS.find(
+    (model) => model.id === modelId
+  );
 }
 
-export const DEFAULT_CHAT_MODEL_ID: SupportedChatModelId = "claude-opus-4-6";
+export const DEFAULT_CHAT_MODEL_ID: SupportedChatModelId =
+  "gemini-2.5-flash";
