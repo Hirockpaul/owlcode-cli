@@ -21,6 +21,8 @@ const submitValidator = zValidator("json", submitSchema, (result, c) => {
     }
 })
 
+const activeResumeSessionIds = new Set<string>();
+
 // strip error messages and empty assistant messages from the conversation
 function buildConversationHistory(
     messages: {role: "USER" | "ASSISTANT" | "ERROR"; content: string; status: MessageStatus}[],
@@ -36,6 +38,18 @@ function buildConversationHistory(
         ]
     })
 };
+
+function getResumableUserMessage(
+    message: {role: "USER" | "ASSISTANT" | "ERROR"; model: string;
+        mode: Mode} [],
+) {
+    const lastMessage = message[message.length - 1];
+    if(!lastMessage || lastMessage.role != "USER" ) {
+        return null
+    }
+
+    return lastMessage;
+}
 
 type StreamParams = {
     sessionId: string;
@@ -53,6 +67,24 @@ async function streamAIResponse (
     const startTime = Date.now();
     const resolveModel = resolveChatModel(model);
     let fullText = "";
+
+    const persistInterruptedMessage = async () => {
+        if(fullText.length === 0) return;
+
+        const elapsedMs = Date.now() - startTime;
+
+        await db.message.create({
+            data: {
+                sessionId,
+                role:"ASSISTANT",
+                status: MessageStatus.INTERRUPTED,
+                model,
+                content:fullText,
+                mode,
+                duration:Math.round(elapsedMs/1000),
+            }
+        })
+    }
 
     try {
         const result = aiStreamText({
@@ -75,6 +107,7 @@ async function streamAIResponse (
         }
 
         if(stream.aborted || abortController.signal.aborted) {
+            await persistInterruptedMessage();
             return;
         }
 
@@ -101,6 +134,7 @@ async function streamAIResponse (
         await stream.writeSSE({event: "done", data: JSON.stringify(doneEvent)})
     } catch (err) {
         if (abortController.signal.aborted) {
+            await persistInterruptedMessage()
             return
         }
 
@@ -135,41 +169,57 @@ const app = new Hono()
      if(!session) {
         return c.json({error: "Session not found"},404);
     }
-    const lastMessage = session.messages[session.messages.length -1]
-    if(!lastMessage || lastMessage.role !== "USER") {
+    const resumableMessage = getResumableUserMessage(session.messages)
+    if(!resumableMessage) {
         return c.json({error: "Session has no pending user message to resume"},409)
     }
    
-    if(!isSupportedChatModel(lastMessage.model)) {
-        return c.json({error: `Session user unsupported model: ${lastMessage.model}`},409)
+    if(!isSupportedChatModel(resumableMessage.model)) {
+        return c.json({error: `Session user unsupported model: ${resumableMessage.model}`},409)
     }
+
+    if(activeResumeSessionIds.has(sessionId)) {
+        return c.json ({
+            error: "Session already has an active resume"
+        },409)
+    }
+
+    activeResumeSessionIds.add(sessionId)
 
     const history = buildConversationHistory(session.messages);
     const abortController = new AbortController();
-
-    return streamSSE(
+    
+    try { 
+       return streamSSE(
         c,
         async(stream) => {
             stream.onAbort(() => {
                 abortController.abort();
             });
 
+            try { 
             await streamAIResponse(stream, {
                 sessionId,
-                model : lastMessage.model,
+                model : resumableMessage.model,
                 history,
-                mode: lastMessage.mode,
+                mode: resumableMessage.mode,
                 abortController
             });
+        } finally {
+            activeResumeSessionIds.delete(sessionId)
+        }
         },
         async (err, stream) => {
+            activeResumeSessionIds.delete(sessionId)
             const message = err instanceof Error ? err.message: String(err);
             const errorEvent: ChatStreamEvent = {type:"error", message};
-            await stream.writeSSE({event: "error", data:JSON.stringify(errorEvent)})
-            
+            await stream.writeSSE({event: "error", data:JSON.stringify(errorEvent)})  
         }
     )
-
+    }catch(error) {
+        activeResumeSessionIds.delete(sessionId);
+        throw error;
+    }
   })  
 
  .post("/:sessionId", submitValidator, async (c) => {

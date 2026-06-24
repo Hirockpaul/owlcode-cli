@@ -16,6 +16,7 @@ import { useTheme } from "../providers/theme";
 
 type Props = {
   onSubmit: (text: string) => void;
+  onInterrupt?: () => void;
   disabled?: boolean;
   fixedWidth?: number | undefined;
 };
@@ -27,7 +28,7 @@ export const TEXTAREA_KEY_BINDINGS: KeyBinding[] =[
   {name: "enter", shift: true, action: "newline"},
 ]
 
-export function InputBar({ onSubmit, disabled = false, fixedWidth, }: Props) {
+export function InputBar({ onSubmit, onInterrupt, disabled = false, fixedWidth, }: Props) {
   const textareaRef = useRef<TextareaRenderable>(null);
   const onSubmitRef  = useRef<() =>void>(() => {});
   const renderer = useRenderer();
@@ -121,11 +122,17 @@ const handleCommandExecute = useCallback((index: number) => {
         textarea.setText("");
         return true;
       }
+
+      if(onInterrupt) {
+        onInterrupt();
+        return true;
+      }
+
       return false;
     });
 
     return () => setResponder("base", null);
-  },[disabled, setResponder]);
+  },[disabled, onInterrupt, setResponder]);
 
   return (
     <box alignItems="center">

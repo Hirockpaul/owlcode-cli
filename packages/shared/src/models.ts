@@ -51,7 +51,7 @@ export const SUPPORTED_CHAT_MODELS = [
     },
   },
   {
-    id: "deepseek-r1-distill-llama-70b",
+    id: "llama-3.1-8b-instant",
     provider: "groq",
     pricing: {
       inputUsdPerMillionTokens: 0,
@@ -59,7 +59,7 @@ export const SUPPORTED_CHAT_MODELS = [
     },
   },
   {
-  id: "qwen-qwq-32b",
+  id: "openai/gpt-oss-120b",
   provider: "groq",
   pricing: {
     inputUsdPerMillionTokens: 0,
@@ -91,4 +91,4 @@ export function findSupportedChatModel(
 }
 
 export const DEFAULT_CHAT_MODEL_ID: SupportedChatModelId =
-  "gemini-2.5-flash";
+  "meta-llama/llama-4-scout-17b-16e-instruct";
