@@ -9,13 +9,13 @@ export function RootLayout () {
      return (
         <ThemeProvider>
           <KeyboardLayerProvider>
-            <DialogProvider>
-              <ToastProvider>
+            <ToastProvider>
+              <DialogProvider>
                 <ThemedRoot>
                     <Outlet/>
                 </ThemedRoot>
-              </ToastProvider>
-            </DialogProvider>
+              </DialogProvider>
+            </ToastProvider>
           </KeyboardLayerProvider>
         </ThemeProvider>
       );
