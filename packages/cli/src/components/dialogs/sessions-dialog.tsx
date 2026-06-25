@@ -74,19 +74,22 @@ export const SessionsDialogContent = () => {
       onSelect={handleSelect}
       filterFn={(s, query) => s.title.toLowerCase().includes(query.toLowerCase())}
       renderItem={(session, isSelected) => (
-        <>
-          <text selectable={false} fg={isSelected ? "black" : "white"}>
-            {session.title}
-          </text>
-          <box flexGrow={1} />
-          <text
-            selectable={false}
-            fg={isSelected ? "black" : undefined}
-            attributes={TextAttributes.DIM}
-          >
-            {format(new Date(session.createdAt), "hh:mm a")}
-          </text>
-        </>
+        <box flexDirection="row" flexGrow={1} width="100%">
+          <box flexGrow={1} flexShrink={1} overflow="hidden">
+            <text selectable={false} fg={isSelected ? "black" : "white"}>
+              {session.title}
+            </text>
+          </box>
+          <box flexShrink={0}>
+            <text
+              selectable={false}
+              fg={isSelected ? "black" : undefined}
+              attributes={TextAttributes.DIM}
+            >
+              {format(new Date(session.createdAt), "hh:mm a")}
+            </text>
+          </box>
+        </box>
       )}
       getKey={(s) => s.id}
       placeholder="Search sessions"

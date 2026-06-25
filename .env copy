@@ -1,5 +1,0 @@
-API_URL=http://localhost:3000
-DATABASE_URL=postgresql://neondb_owner:npg_gCIdknKZ9wp0@ep-winter-dust-ao94gmwa-pooler.c-2.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require
-GROQ_API_KEY=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 
-GOOGLE_GENERATIVE_AI_API_KEY=AQ.Ab8RN6I2TlTov5XMTVtHZe0F_9CZNzoodCW0ae__7r8-SigXyA
-
