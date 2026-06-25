@@ -3,7 +3,7 @@ import { EmptyBorder } from "./border";
 import  type {KeyBinding } from "@opentui/core";
 import { CommandMenu } from "./command-menu";
 import { useCallback, useEffect, useRef } from "react";
-import { useRenderer } from "@opentui/react";
+import { useRenderer, useKeyboard } from "@opentui/react";
 import { TextareaRenderable } from "@opentui/core";
 import type { Command } from "./command-menu/types";
 import { useCommandMenu } from "./command-menu/use-command-menu";
@@ -13,6 +13,10 @@ import { useKeyboardLayer } from "../providers/keyboard-layer";
 import { text } from "node:stream/consumers";
 import { useDialog } from "../providers/dialog";
 import { useTheme } from "../providers/theme";
+import {useNavigate} from "react-router"
+import { usePromptConfig } from "../providers/prompt-config";
+import {Mode} from "@owlcode/database/enums"
+
 
 type Props = {
   onSubmit: (text: string) => void;
@@ -29,11 +33,13 @@ export const TEXTAREA_KEY_BINDINGS: KeyBinding[] =[
 ]
 
 export function InputBar({ onSubmit, onInterrupt, disabled = false, fixedWidth, }: Props) {
+  const {mode, toggleMode, setMode, setModel} = usePromptConfig();
   const textareaRef = useRef<TextareaRenderable>(null);
   const onSubmitRef  = useRef<() =>void>(() => {});
   const renderer = useRenderer();
   const toast = useToast()
   const dialog = useDialog();
+  const navigate = useNavigate();
   const {isTopLayer, setResponder} = useKeyboardLayer();
   const {colors} = useTheme()
 
@@ -84,12 +90,17 @@ const handleCommandExecute = useCallback((index: number) => {
         exit: () =>renderer.destroy(),
         toast,
         dialog,
+        navigate,
+        mode,
+        setMode,
+        setModel,
       });
+  
     } else {
       textarea.insertText(command.value + " ");
     }
 
-  },[renderer, toast, dialog]);
+  },[renderer, toast, dialog, navigate , mode, setMode, setModel]);
  
   // wire up textarea submit handler once  so it alwasy read the latest state.
   useEffect(() => {
@@ -111,6 +122,15 @@ const handleCommandExecute = useCallback((index: number) => {
     }
     handleSubmit();
   };
+
+  useKeyboard((key) => {
+    if(disabled) return;
+    if(!isTopLayer("base") )  return;
+    if(key.name === "tab") {
+      key.preventDefault();
+      toggleMode();
+    }
+  })
 
   // Register the base layer responder for ctrl+c dismissal
   useEffect(() => {
@@ -138,7 +158,7 @@ const handleCommandExecute = useCallback((index: number) => {
     <box alignItems="center">
       <box
         border={["left"]}
-        borderColor={colors.primary}
+        borderColor={mode === Mode.BUILD ? colors.primary : colors.planMode}
         customBorderChars={{
           ...EmptyBorder,
           vertical: "┃",
