@@ -90,43 +90,41 @@ export function DialogSearchList<T>({
 
     });
 
-       return (
-          <box flexDirection= "column" gap={1}>
-            <input
-            ref={inputRef}
-            placeholder={placeholder}
-            focused
-            onContentChange={handleContentChange}
-          />
-          {filtered.length === 0? (
-            <text attributes={TextAttributes.DIM}>
-                {emptyText}
-            </text>
-          ) : (
-            <scrollbox ref={scrollRef} height={visibleHeight}>
-                {filtered.map((item, i) => {
-                    const isSelected = i === selectedIndex;
-                    return (
-                        <box
-                        key={getKey(item)}
-                        flexDirection="row"
-                        height={1}
-                        overflow="hidden"
-                        backgroundColor={isSelected ? colors.selection : undefined} 
-                        onMouse={() => {
-                            setSelectedIndex(i);
-                            if(onHighlight) onHighlight(item)
-                        }}
-                        onMouseDown={() => onSelect(item)}
-                        >
-                            {renderItem(item, isSelected)}
-
-                        </box>
-                    )
-                })}
-
-            </scrollbox>
-          )}
-          </box>
-       )
+        return (
+    <box flexDirection="column" gap={1}>
+      <input
+        ref={inputRef}
+        placeholder={placeholder}
+        focused
+        onContentChange={handleContentChange}
+      />
+      {filtered.length === 0 ? (
+        <text attributes={TextAttributes.DIM}>
+          {emptyText}
+        </text>
+      ) : (
+        <scrollbox ref={scrollRef} height={visibleHeight}>
+          {filtered.map((item, i) => {
+            const isSelected = i === selectedIndex;
+            return (
+              <box
+                key={getKey(item)}
+                flexDirection="row"
+                height={1}
+                overflow="hidden"
+                backgroundColor={isSelected ? colors.selection : undefined}
+                onMouseMove={() => {
+                  setSelectedIndex(i);
+                  if (onHighlight) onHighlight(item);
+                }}
+                onMouseDown={() => onSelect(item)}
+              >
+                {renderItem(item, isSelected)}
+              </box>
+            )
+          })}
+        </scrollbox>
+      )}
+    </box>
+  );
 };

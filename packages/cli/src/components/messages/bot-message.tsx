@@ -28,56 +28,61 @@ export function BotMessage({
     .join("")
 
 return (
-    <box width="100%" alignItems="center">
+  <box width="100%" alignItems="center">
     <box paddingY={1} width="100%">
-    <box paddingX={3} width="100%">
+      <box paddingX={3} width="100%">
         <text>{text}</text>
+      </box>
     </box>
-    </box>
 
-    <box paddingX={3} paddingBottom={1} gap={1} width="100%">
-        <box flexDirection="row" gap={2}>
+    <box paddingX={3} paddingBottom={1} width="100%">
+      <box flexDirection="row" gap={2}>
+        <text
+          attributes={interrupted ? TextAttributes.DIM : 0}
+          fg={
+            interrupted
+              ? undefined
+              : mode === Mode.PLAN
+                ? colors.planMode
+                : colors.primary
+          }
+        >
+          ◉
+        </text>
 
-            <text attributes={interrupted ? TextAttributes.DIM:0}
-             fg={interrupted ? undefined : mode === Mode.PLAN ? colors.planMode : colors.primary}
-             >
-                ◉
-             </text>
+        <box flexDirection="row" gap={1}>
+          <text attributes={interrupted ? TextAttributes.DIM : 0}>
+            {mode === Mode.PLAN ? "Plan" : "Build"}
+          </text>
 
+          <text
+            attributes={TextAttributes.DIM}
+            fg={colors.dimSeparator}
+          >
+            ›
+          </text>
+
+          <text attributes={TextAttributes.DIM}>
+            {model}
+          </text>
+
+          {(duration || interrupted) && (
             <box flexDirection="row" gap={1}>
+              <text
+                attributes={TextAttributes.DIM}
+                fg={colors.dimSeparator}
+              >
+                ›
+              </text>
 
-                <text attributes={interrupted ? TextAttributes.DIM :0}
-                    >{mode ==Mode.PLAN ? "plan" :"Build"} </text>
-
-                <text attributes={TextAttributes.DIM} fg = {colors.dimSeparator}>
-                     ›
-                </text>
-                <text attributes={TextAttributes.DIM}>{model}</text>
-                {(duration || interrupted) && (
-                    <>
-                     <text attributes={TextAttributes.DIM} fg={colors.dimSeparator}>
-                           ›
-                     </text>
-                    <text attributes={TextAttributes.DIM} >
-                    {interrupted ? "interrupted" : duration}
-                    </text>
-                    </>
-                )}
-                
-
+              <text attributes={TextAttributes.DIM}>
+                {interrupted ? "Interrupted" : duration}
+              </text>
             </box>
-            
-
+          )}
         </box>
-
+      </box>
     </box>
-
-    </box>
-)
-
-
-
-
-
-
+  </box>
+);
 }

@@ -1,4 +1,5 @@
-import { ThemeDialogContent } from "../dialogs";
+import { Children } from "react";
+import { ThemeDialogContent, SessionsDialogContent } from "../dialogs";
 import  type  {Command} from "./types";
 
 export const COMMANDS: Command[] = [
@@ -39,8 +40,10 @@ export const COMMANDS: Command[] = [
     description: "Browse past sessions",
     value: "/sessions",
      action : (ctx) => {
-      ctx.toast.show({message: "Loading sessions..."});
-      
+      ctx.dialog.open({
+        title: "Sessions",
+        children:<SessionsDialogContent/>,
+      });
     }  
   },
   {

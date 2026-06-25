@@ -32,19 +32,19 @@ export function CommandMenu({
     return (
         <scrollbox ref={scrollRef} height={MAX_VISIBLE_ITEMS} minHeight={MAX_VISIBLE_ITEMS}>
             {filtered.length === 0 ? (
-                <>
-                    <box paddingX={1}>
+                [
+                    <box paddingX={1} key="no-results">
                         <text attributes={TextAttributes.DIM}>
                             No matching commands
                         </text>
-                    </box>
-                    {Array.from({ length: MAX_VISIBLE_ITEMS - 1 }).map((_, i) => (
+                    </box>,
+                    ...Array.from({ length: MAX_VISIBLE_ITEMS - 1 }).map((_, i) => (
                         <box key={`pad-${i}`} />
-                    ))}
-                </>
+                    )),
+                ]
             ) : (
-                <>
-                    {filtered.map((cmd, i) => {
+                [
+                    ...filtered.map((cmd, i) => {
                         const isSelected = i === selectIndex;
 
                         return (
@@ -69,11 +69,11 @@ export function CommandMenu({
                                 </box>
                             </box>
                         );
-                    })}
-                    {Array.from({ length: padCount }).map((_, i) => (
+                    }),
+                    ...Array.from({ length: padCount }).map((_, i) => (
                         <box key={`pad-${i}`} />
-                    ))}
-                </>
+                    )),
+                ]
             )}
         </scrollbox>
     );
