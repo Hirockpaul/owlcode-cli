@@ -10,17 +10,35 @@ import { useToast } from "../providers/toast";
 import { apiClient } from "../lib/api-client";
 import { getErrorMessage } from "../lib/http-errors";
 import prettyMs from "pretty-ms"
-import { DEFAULT_CHAT_MODEL_ID, type SupportedChatModelId } from "@owlcode/shared";
+import { messagePartsSchema, type SupportedChatModelId } from "@owlcode/shared";
 import { useChat } from "../hooks/use-chat";
 import type { Message, ClientMessagePart } from "../hooks/use-chat";
 import { MessageStatus } from "@owlcode/database/enums";
 import { useKeyboardLayer } from "../providers/keyboard-layer";
+import { usePromptConfig } from "../providers/prompt-config";
 
 type SessionData = InferResponseType<(typeof apiClient.session)[":id"]["$get"], 200>;
 
 const sessionLocationSchema = z.object ({
     session:z.custom<SessionData>((val) => val != null && typeof val ==="object" && "id" in val)
 })
+
+function mapDbMessageParts(parts: unknown, fallbackText: string): ClientMessagePart[] {
+    const parsed = messagePartsSchema.safeParse(parts);
+
+    if (!parsed.success) {
+        return [{ type: "text", text: fallbackText }];
+    }
+
+    return parsed.data.map((part): ClientMessagePart => {
+        if (part.type !== "tool-call") return part;
+
+        return {
+            ...part,
+            status: part.result == null ? "calling" : "done",
+        };
+    });
+}
  
 function mapDbMessages(dbMessages: SessionData["messages"]):Message[] {
     return dbMessages.map((m): Message => {
@@ -37,13 +55,21 @@ function mapDbMessages(dbMessages: SessionData["messages"]):Message[] {
                 model: m.model as SupportedChatModelId,
             }
         }
+
+        const parsedParts = m.parts == null ? null : messagePartsSchema.safeParse(m.parts);
+const parts: ClientMessagePart[] = parsedParts?.success
+            ? parsedParts.data.map((p) =>
+                p.type === "tool-call" ? { ...p, status: "done" as const } : p,
+            )
+            : [];
+
         return {
             id:m.id,
             role:"assistant",
             content: m.content,
             mode:m.mode,
             model:m.model as SupportedChatModelId,
-            parts: [{type: "text", text: m.content}],
+            parts,
             ...(m.duration != null ? {duration: prettyMs(m.duration * 1000)}: {}),
             interrupted: m.status === MessageStatus.INTERRUPTED,
         }
@@ -56,7 +82,7 @@ function ChatMessage(
         }
     ) {
     if (msg.role === "user") {
-        return <UserMessage message={msg.content} />
+        return <UserMessage message={msg.content} mode ={msg.mode}/>
     }
 
     if (msg.role === "error") {
@@ -77,6 +103,7 @@ function ChatMessage(
 function SessionChat({session}: {session: SessionData}) {
     const [initialMessage] = useState(() => mapDbMessages(session.messages));
     const { isTopLayer } = useKeyboardLayer();
+    const { mode, model } = usePromptConfig();
     const {messages, streaming, submit, abort, interrupt} = useChat(session.id, initialMessage);
 
     //stop the pendiing reply when the user leaves thie session 
@@ -96,7 +123,7 @@ function SessionChat({session}: {session: SessionData}) {
     return (
         <SessionShell
         onSubmit={(text) => 
-            submit({userText: text, mode: "BUILD", model: DEFAULT_CHAT_MODEL_ID})
+            submit({userText: text, mode, model})
         }
         onInterrupt={interrupt}
         loading={streaming.status === "streaming"}

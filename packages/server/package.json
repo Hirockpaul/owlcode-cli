@@ -7,13 +7,13 @@
     },
     "scripts": {
         "dev": "bun run --hot src/index.ts",
-        "build" : "bun build src/index.ts --outdir dist --target bun",
+        "build": "bun build src/index.ts --outdir dist --target bun",
         "postinstall": "bun run --cwd ../database db:generate"
-
     },
     "dependencies": {
         "@ai-sdk/google": "^3.0.83",
         "@ai-sdk/groq": "^3.0.42",
+        "@ai-sdk/provider-utils": "^5.0.0",
         "@hono/zod-validator": "^0.8.0",
         "@owlcode/database": "workspace:*",
         "@owlcode/shared": "workspace:*",

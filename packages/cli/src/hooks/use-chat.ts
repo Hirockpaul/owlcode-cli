@@ -12,7 +12,24 @@ import{
 import { requestId } from "hono/request-id";
 import { request } from "node:http";
 
-export type ClientMessagePart = { type: "text"; text: string};
+export type ClientToolCallPart = {
+    type: "tool-call";
+    id: string;
+    name: string;
+    args: Record<string, unknown>;
+    result?: string;
+    status: "calling" | "done";
+}
+
+export type ClientReasoningPart = {
+    type: "reasoning";
+    text: string;
+}
+
+export type ClientMessagePart =
+    | { type: "text"; text: string }
+    | ClientToolCallPart
+    | ClientReasoningPart;
 
 export type Message = 
  | {id: string;
@@ -150,49 +167,70 @@ export function useChat (
                     ]);
                     break;
                 }
-                switch (event.type) {
-                    case "text-delta": {
-                       const last = parts[parts.length-1];
-                       if(last && last.type === "text") {
+
+                if (event.type === "reasoning-data") {
+                    const last = parts[parts.length-1];
+                    if (last && last.type === "reasoning") {
                         last.text += event.text;
-                       } else {
-                        parts.push({type: "text", text: event.text})
-                       }
-                       emitParts(activeStream.requestId, parts);
-                       break;
+                    } else {
+                        parts.push({ type: "reasoning", text: event.text });
                     }
-                    case "done": {
-                        if(!isActiveRequest(activeStream.requestId)) return
-                        
-                        const fullText = parts
+                    emitParts(activeStream.requestId, parts);
+                } else if (event.type === "tool-call") {
+                    parts.push({
+                        type: "tool-call",
+                        id: event.toolCallId,
+                        name: event.toolName,
+                        args: event.args,
+                        status: "calling",
+                    });
+                    emitParts(activeStream.requestId, parts);
+                } else if (event.type === "tool-result") {
+                    const tc = parts.find(
+                        (p): p is ClientToolCallPart => p.type === "tool-call" && p.id === event.toolCallId
+                    );
+                    if (tc) {
+                        tc.status = "done";
+                        tc.result = event.result;
+                    }
+                    emitParts(activeStream.requestId, parts);
+                } else if (event.type === "text-delta") {
+                    const last = parts[parts.length - 1];
+                    if (last && last.type === "text") {
+                        last.text += event.text;
+                    } else {
+                        parts.push({ type: "text", text: event.text });
+                    }
+                    emitParts(activeStream.requestId, parts);
+                } else if (event.type === "done") {
+                    if (!isActiveRequest(activeStream.requestId)) return;
+
+                    const fullText = parts
                         .filter((p) => p.type == "text")
                         .map((p) => p.text)
                         .join("");
 
-                        updateMessages((prev) => [
-                            ...prev,
-                            {
-                                id:event.messageId,
-                                role: "assistant",
-                                content: fullText,
-                                mode: activeStream.mode,
-                                model:activeStream.model,
-                                duration:prettyMs(event.durationMs),
-                                parts: [...parts]
-                            }
-                        ])
-                        break
-                    }
-                    case "error" :
-                        updateMessages((prev) => [
-                            ...prev,
-                            {
-                                id: crypto.randomUUID(),
-                                role:"error",
-                                content: event.message,
-                            }
-                        ])
-                        break;
+                    updateMessages((prev) => [
+                        ...prev,
+                        {
+                            id: event.messageId,
+                            role: "assistant",
+                            content: fullText,
+                            mode: activeStream.mode,
+                            model: activeStream.model,
+                            duration: prettyMs(event.durationMs),
+                            parts: [...parts],
+                        },
+                    ]);
+                } else if (event.type === "error") {
+                    updateMessages((prev) => [
+                        ...prev,
+                        {
+                            id: crypto.randomUUID(),
+                            role: "error",
+                            content: event.message,
+                        },
+                    ]);
                 }
             }
         },[updateMessages,emitParts,isActiveRequest])
