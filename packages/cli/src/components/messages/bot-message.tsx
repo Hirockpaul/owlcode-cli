@@ -24,6 +24,12 @@ function formatToolArgs(tc:ClientToolCallPart) : string {
   return Object.values(tc.args).map(String).join(" ");
 };
 
+function formatToolCallStatus(tc: ClientToolCallPart): string {
+  const args = formatToolArgs(tc);
+  const suffix = tc.status === "calling" ? "..." : "";
+  return [formateToolName(tc.name), args].filter(Boolean).join(" ") + suffix;
+}
+
 type PartGroup = {
   type: ClientMessagePart["type"];
   parts: ClientMessagePart[];
@@ -61,59 +67,56 @@ export function BotMessage({
 
  return (
   <box width="100%" alignItems="center">
-    {groupConsecutiveParts(parts).map((group) => (
-      <box key={group.key} width="100%" paddingY={1}>
-        {group.parts.map((part, j) => {
-          if (part.type === "reasoning") {
-            return (
-              <box
-                key={`reasoning-${j}`}
-                border={["left"]}
-                borderColor={colors.thinkingBorder}
-                customBorderChars={{ ...EmptyBorder, vertical: "│" }}
-                width="100%"
-                paddingX={2}
-              >
-                <text attributes={TextAttributes.DIM}>
-                  <em fg={colors.thinking}>Thinking:</em> {part.text}
-                </text>
-              </box>
-            );
-          }
-
-          if(part.type === "tool-call") {
+    <box width="100%" alignItems="center">
+      {groupConsecutiveParts(parts).map((group) => (
+        <box key={group.key} width="100%" paddingY={1}>
+          {group.parts.map((part, j) => {
+            if (part.type === "reasoning") {
               return (
-              <box
-                key={`reasoning-${j}`}
-                border={["left"]}
-                borderColor={colors.thinkingBorder}
-                customBorderChars={{ ...EmptyBorder, vertical: "│" }}
-                width="100%"
-                paddingX={2}
-              >
-                <text attributes={TextAttributes.DIM}>
-                  <em fg={colors.info}>{formateToolName(part.name)}</em> 
-                  {formatToolArgs(part)}
-                  {part.status === "calling" ? "…" : " "}
-                </text>
-              </box>
-            );
-          }
-
-            if (part.type === "text") {
-              return (
-                <box key={`text-${j}`} width="100%" paddingX={3}>
-                  <text>{part.text}</text>
+                <box
+                  key={`reasoning-${j}`}
+                  border={["left"]}
+                  borderColor={colors.thinkingBorder}
+                  customBorderChars={{ ...EmptyBorder, vertical: "│" }}
+                  width="100%"
+                  paddingX={2}
+                >
+                  <text attributes={TextAttributes.DIM} fg={colors.thinking}>
+                    {`Thinking: ${part.text}`}
+                  </text>
                 </box>
               );
             }
-          return null;
-        })}
-      </box>
-    ))}
-  </box>
-);
 
+            if(part.type === "tool-call") {
+                return (
+                <box
+                  key={`tool-call-${j}`}
+                  border={["left"]}
+                  borderColor={colors.thinkingBorder}
+                  customBorderChars={{ ...EmptyBorder, vertical: "│" }}
+                  width="100%"
+                  paddingX={2}
+                >
+                  <text attributes={TextAttributes.DIM} fg={colors.info}>
+                    {formatToolCallStatus(part)}
+                  </text>
+                </box>
+              );
+            }
+
+              if (part.type === "text") {
+                return (
+                  <box key={`text-${j}`} width="100%" paddingX={3}>
+                    <text>{part.text}</text>
+                  </box>
+                );
+              }
+            return null;
+          })}
+        </box>
+      ))}
+    </box>
       <box paddingX={3} paddingY={1} gap={1} width="100%">
         <box flexDirection="row" gap={2}>
           <text fg={mode === Mode.PLAN ? colors.planMode : colors.primary}>◉</text>
@@ -134,6 +137,6 @@ export function BotMessage({
           </box>
         </box>
       </box>
-    
-  
+    </box>
+  );
 }
