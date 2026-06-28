@@ -36,7 +36,7 @@ export function SessionShell({
                 <box gap={1}>{children}</box>
             </scrollbox>
             <box flexShrink={0}>
-                <InputBar onSubmit={onSubmit} onInterrupt={onInterrupt} disabled={inputDisabled} />
+                <InputBar onSubmit={onSubmit} disabled={inputDisabled} />
             </box>
             <box
                 flexShrink={0}

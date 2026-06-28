@@ -17,7 +17,7 @@ import { MessageStatus } from "@owlcode/database/enums";
 import { useKeyboardLayer } from "../providers/keyboard-layer";
 import { usePromptConfig } from "../providers/prompt-config";
 
-type SessionData = InferResponseType<(typeof apiClient.session)[":id"]["$get"], 200>;
+type SessionData = InferResponseType<(typeof apiClient.sessions)[":id"]["$get"], 200>;
 
 const sessionLocationSchema = z.object ({
     session:z.custom<SessionData>((val) => val != null && typeof val ==="object" && "id" in val)
@@ -167,7 +167,7 @@ export function Session() {
         let ignore = false;
         const fetchSession = async () => {
             try {
-                const response = await apiClient.session[":id"].$get({
+                const response = await apiClient.sessions[":id"].$get({
                     param: { id },
                 });
                 if(ignore) return

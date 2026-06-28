@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef } from "react";
 import { z } from "zod";
 import { useNavigate, useLocation } from "react-router";
+import { resolve } from "node:path";
 import { UserMessage } from "../components/messages";
 import { SessionShell } from "../components/session-shell";
 import { useToast } from "../providers/toast";
@@ -44,10 +45,14 @@ export function NewSession () {
     let ignore = false;
     const createSession = async () => {
       try {
-           const res  = await apiClient.session.$post({
+           const cwd = process.cwd().endsWith("/packages/cli")
+             ? resolve(process.cwd(), "..", "..")
+             : process.cwd();
+
+           const res  = await apiClient.sessions.$post({
             json: {
               title: state.message.slice(0, 100),
-              cwd: process.cwd(),
+              cwd,
               initialMessage: {
                 role: "USER",
                 content: state.message,

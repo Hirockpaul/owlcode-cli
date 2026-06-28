@@ -293,7 +293,7 @@ export function useChat (
         //auto - resume when the conversation end with a user message that has no reply
         const hasAutoResumeRef = useRef(false);
         useEffect(()=> {
-            if(hasAutoResumeRef.current) request;
+            if(hasAutoResumeRef.current) return;
             const last = initialMessage[initialMessage.length -1];
             if(!last || last.role !== "user") return;
 

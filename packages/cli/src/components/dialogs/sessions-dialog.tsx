@@ -9,7 +9,7 @@ import { getErrorMessage } from "../../lib/http-errors";
 import { DialogSearchList } from "../dialog-search-list";
 import type { InferResponseType } from "hono/client";
 
-type Session = InferResponseType<(typeof apiClient.session)["$get"],200>[number];
+type Session = InferResponseType<(typeof apiClient.sessions)["$get"],200>[number];
 
 export const SessionsDialogContent = () => {
  const [sessions, setSessions] = useState<Session[]>([]);
@@ -23,7 +23,7 @@ export const SessionsDialogContent = () => {
 
     const fetchSessions = async () => {
       try {
-        const res = await apiClient.session.$get();
+        const res = await apiClient.sessions.$get();
         if (!res.ok) {
           throw new Error(await getErrorMessage(res));
         }
