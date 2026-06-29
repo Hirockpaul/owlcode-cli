@@ -1,5 +1,4 @@
-import type { Mode } from "../../../../database/generated/prisma/client";
-import type { SupportedChatModelId } from "@owlcode/shared";
+import type { ModeType, SupportedChatModelId } from "@owlcode/shared";
 import type { DialogContextValue } from "../../providers/dialog";
 import type { ToastContextValue } from "../../providers/toast";
 
@@ -8,8 +7,8 @@ export type CommandContext = {
     toast: ToastContextValue;
     dialog: DialogContextValue;
     navigate: (path: string) => void;
-    mode: Mode;
-    setMode: (mode: Mode) => void;
+    mode: ModeType;
+    setMode: (mode: ModeType) => void;
     setModel: (model: SupportedChatModelId) => void;
 };
 

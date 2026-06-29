@@ -8,11 +8,11 @@ import { useToast } from "../providers/toast";
 import { apiClient } from "../lib/api-client";
 import { getErrorMessage } from "../lib/http-errors";
 import { usePromptConfig } from "../providers/prompt-config";
-import { Mode } from "@owlcode/database/enums";
+import { Mode, modeSchema } from "@owlcode/shared";
 
 const newSessionStateSchema = z.object({
   message : z.string(),
-  mode:z.enum(Mode),
+  mode:modeSchema,
   model : z.string()
 })
 
@@ -52,13 +52,7 @@ export function NewSession () {
            const res  = await apiClient.sessions.$post({
             json: {
               title: state.message.slice(0, 100),
-              cwd,
-              initialMessage: {
-                role: "USER",
-                content: state.message,
-                mode: state.mode,
-                model:state.model
-              },
+             
             },
           });
         if(ignore) return;
@@ -69,7 +63,7 @@ export function NewSession () {
 
         navigate(`/sessions/${session.id}`, {
           replace: true,
-          state: { session },
+          state: { session, initialPrompt: state },
         });
       
       } catch (error) {

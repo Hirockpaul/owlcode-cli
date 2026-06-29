@@ -1,13 +1,13 @@
-import type { Mode } from "@owlcode/database/enums";
+import type { ModeType } from "@owlcode/shared";
 
 type SystemPromptParams = {
-  cwd: string | null;
-    mode: Mode;
+  cwd?: string | null;
+  mode: ModeType;
 };
 
 export function buildSystemPrompt({ 
   cwd,
-  mode,
+  mode
 }: SystemPromptParams): string {
   const parts: string[] = [];
 
@@ -38,7 +38,7 @@ export function buildSystemPrompt({
     - After making changes, verify the work when possible`);
   }
 
-  if (cwd && mode === "PLAN") {
+  if (mode === "PLAN") {
     parts.push(`
     ## Tool Usage
     You have these tools available:
@@ -53,7 +53,7 @@ export function buildSystemPrompt({
     3. **Batch your tool calls.** Call multiple tools in parallel when possible (e.g. read 5 files at once, not one at a time).`);
   }
 
-    if (cwd && mode === "BUILD") {
+    if (mode === "BUILD") {
     parts.push(`
     ## Tool Usage
     You have these tools available:

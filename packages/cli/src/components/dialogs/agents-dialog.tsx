@@ -1,16 +1,16 @@
 import { useCallback, useEffect, useRef } from "react";
 import { useDialog } from "../../providers/dialog";
 import { DialogSearchList } from "../dialog-search-list";
-import { Mode } from "@owlcode/database/enums"
+import { Mode, type ModeType } from "@owlcode/shared";
 
-const AVAILABLE_MODES: Mode[] = [Mode.PLAN, Mode.BUILD];
+const AVAILABLE_MODES: ModeType[] = [Mode.PLAN, Mode.BUILD];
 
 type AgentsDialogContentProps = {
-    currentMode:Mode;
-    onSelectMode:(mode:Mode) => void;
+    currentMode:ModeType;
+    onSelectMode:(mode:ModeType) => void;
 }
 
-function getModeLabel(mode:Mode) {
+function getModeLabel(mode:ModeType) {
     return mode === Mode.PLAN ? "Plan" : "Build";
 }
 
@@ -22,7 +22,7 @@ export const AgentsDialogContent = ({
      const confirmedRef = useRef(false);
 
    const handleSelect = useCallback(
-    (nextMode: Mode) => {
+    (nextMode: ModeType) => {
         onSelectMode(nextMode);
         dialog.close();
     },
