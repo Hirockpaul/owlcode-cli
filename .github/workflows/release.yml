@@ -63,26 +63,36 @@ jobs:
         env:
           GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
           GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+          GPG_KEY_ID: ${{ vars.GPG_KEY_ID }}
         run: |
           set -euo pipefail
           key_file="$(mktemp)"
-          trap 'rm -f -- "$key_file"' EXIT
-          chmod 600 "$key_file"
+          passphrase_file="$(mktemp)"
+          trap 'rm -f -- "$key_file" "$passphrase_file"' EXIT
+          chmod 600 "$key_file" "$passphrase_file"
           printf '%s' "$GPG_PRIVATE_KEY" > "$key_file"
+          printf '%s' "$GPG_PASSPHRASE" > "$passphrase_file"
           gpg --batch --import "$key_file"
 
           expected_fingerprint="$(printf '%s' "$GPG_KEY_ID" | tr -d '[:space:]' | tr '[:lower:]' '[:upper:]')"
           if ! gpg --batch --with-colons --list-secret-keys "$expected_fingerprint" | \
             awk -F: -v expected="$expected_fingerprint" \
               '$1 == "fpr" && toupper($10) == expected { found = 1 } END { exit !found }'; then
-            echo "::error::Imported private key does not contain the configured GPG_KEY_ID"
+            echo "::error::Imported private key does not contain the configured GPG_KEY_ID fingerprint"
             exit 1
           fi
 
-          gpg --batch --yes --armor --pinentry-mode loopback \
-            --passphrase "$GPG_PASSPHRASE" --local-user "$expected_fingerprint" \
-            --detach-sign --output dist/release-manifest.json.asc dist/release-manifest.json
-          gpg --batch --verify dist/release-manifest.json.asc dist/release-manifest.json
+          gpg --batch --yes \
+            --pinentry-mode loopback \
+            --passphrase-file "$passphrase_file" \
+            --armor \
+            --local-user "$expected_fingerprint" \
+            --detach-sign \
+            --output dist/release-manifest.json.asc \
+            dist/release-manifest.json
+          gpg --batch --verify \
+            dist/release-manifest.json.asc \
+            dist/release-manifest.json
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v6
