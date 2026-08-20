@@ -16,6 +16,7 @@ import type { Prisma } from "@owlcode/database";
 import {createTools} from "../tools"
 import { buildSystemPrompt } from "../../system-prompt";
 import type { AuthenticatedEnv } from "../middleware/require-auth";
+import { randomUUID } from "node:crypto";
 
 import type { LanguageModelUsage } from "ai";
 import { requireCreditsBalance } from "../middleware/require-credits-balance";
@@ -35,33 +36,129 @@ const submitValidator = zValidator("json", submitSchema, (result, c) => {
 })
 
 const activeResumeSessionIds = new Set<string>();
+const activeRegenerateSessionIds = new Set<string>();
+
+type ClientMessagePart =
+    | {type: "text" | "reasoning"; text: string}
+    | {
+        type: `tool-${string}`;
+        toolCallId: string;
+        input?: unknown;
+        state?: "input-available" | "output-available" | "output-error";
+        output?: unknown;
+        errorText?: string;
+    };
+
+type StoredChatMessage = {
+    id: string;
+    role: "user" | "assistant" | "error" | "USER" | "ASSISTANT" | "ERROR";
+    parts?: ClientMessagePart[];
+    content?: string;
+    status?: MessageStatus;
+    model?: string;
+    mode?: Mode;
+    metadata?: {
+        mode?: Mode;
+        model?: string;
+        durationMs?: number;
+        status?: MessageStatus;
+    };
+};
+
+function readSessionMessages(messages: Prisma.JsonValue): StoredChatMessage[] {
+    return Array.isArray(messages) ? (messages as StoredChatMessage[]) : [];
+}
+
+function getSessionCwd(session: unknown) {
+    return (session as {cwd?: string | null}).cwd ?? null;
+}
+
+function getMessageText(message: StoredChatMessage) {
+    if(typeof message.content === "string") return message.content;
+
+    return (message.parts ?? [])
+        .flatMap((p) => p.type === "text" ? [p.text] : [])
+        .join("");
+}
+
+function toClientParts(parts: MessagePart[]): ClientMessagePart[] {
+    return parts.map((part) => {
+        if(part.type === "tool-call") {
+            return {
+                type: `tool-${part.name}` as const,
+                toolCallId: part.id,
+                input: part.args,
+                state: part.result ? ("output-available" as const) : ("input-available" as const),
+                output: part.result,
+            };
+        }
+
+        return part;
+    });
+}
+
+async function appendSessionMessage(
+    sessionId: string,
+    userId: string,
+    message: StoredChatMessage,
+) {
+    const session = await db.session.findFirst({
+        where: {id: sessionId, userId},
+        select: {messages: true},
+    });
+
+    if(!session) return null;
+
+    const messages = readSessionMessages(session.messages);
+    await db.session.update({
+        where: {id: sessionId},
+        data: {
+            messages: [...messages, message] as Prisma.InputJsonValue,
+        },
+    });
+
+    return message;
+}
 
 // strip error messages and empty assistant messages from the conversation
 function buildConversationHistory(
-    messages: {role: "USER" | "ASSISTANT" | "ERROR"; content: string; status: MessageStatus}[],
+    messages: StoredChatMessage[],
 ) {
     return messages.flatMap((m) => {
-        if(m.role === "ERROR") return [];
-        if(m.role === "ASSISTANT" && m.content.length === 0) return [];
+        const role = m.role.toLowerCase();
+        const content = getMessageText(m);
+
+        if(role === "error") return [];
+        if(role === "assistant" && content.length === 0) return [];
+
         return [
             {
-                role:m.role ==="USER" ? ("user" as const) : ("assistant" as const),
-                content:m.content
+                role: role ==="user" ? ("user" as const) : ("assistant" as const),
+                content
             }
         ]
     })
 };
 
 function getResumableUserMessage(
-    message: {role: "USER" | "ASSISTANT" | "ERROR"; model: string;
-        mode: Mode} [],
+    message: StoredChatMessage[],
 ) {
     const lastMessage = message[message.length - 1];
-    if(!lastMessage || lastMessage.role != "USER" ) {
+    if(!lastMessage || lastMessage.role.toLowerCase() != "user" ) {
         return null
     }
 
     return lastMessage;
+}
+
+function getLatestUserMessageIndex(messages: StoredChatMessage[]) {
+    for (let i = messages.length - 1; i >= 0; i--) {
+        if(messages[i]?.role.toLowerCase() === "user") {
+            return i;
+        }
+    }
+
+    return -1;
 }
 
 type StreamParams = {
@@ -100,20 +197,20 @@ async function streamAIResponse (
          }
 
         const elapsedMs = Date.now() - startTime;
-        const validatedParts: Prisma.InputJsonValue | undefined =
-        parts.length > 0 ? messagePartsSchema.parse(parts) : undefined;
-
-        return db.message.create({
-            data: {
-                sessionId,
-                role:"ASSISTANT",
-                status: MessageStatus.INTERRUPTED,
-                model,
-                content:fullText,
-                parts: validatedParts,
+        return appendSessionMessage(sessionId, userId, {
+            id: randomUUID(),
+            role:"assistant",
+            status: MessageStatus.INTERRUPTED,
+            model,
+            content:fullText,
+            parts: toClientParts(messagePartsSchema.parse(parts)),
+            mode,
+            metadata: {
                 mode,
-                duration:Math.round(elapsedMs/1000),
-            }
+                model,
+                durationMs: elapsedMs,
+                status: MessageStatus.INTERRUPTED,
+            },
         })
     }
 
@@ -253,30 +350,32 @@ async function streamAIResponse (
         .map((p) => p.text)
         .join("")
         
-        const validatedParts: Prisma.InputJsonValue | undefined =
-        parts.length > 0 ? messagePartsSchema.parse(parts) : undefined;
-       
-        const assistantMessage = await db.message.create({
-            data: {
-                sessionId,
-                role:"ASSISTANT",
-                status: MessageStatus.COMPLETE,
-                model,
-                content:fullText,
-                parts: validatedParts,
+        const assistantMessage = await appendSessionMessage(sessionId, userId, {
+            id: randomUUID(),
+            role:"assistant",
+            status: MessageStatus.COMPLETE,
+            model,
+            content:fullText,
+            parts: toClientParts(messagePartsSchema.parse(parts)),
+            mode,
+            metadata: {
                 mode,
-                duration:Math.round(elapsedMs/1000),
-            }
+                model,
+                durationMs: elapsedMs,
+                status: MessageStatus.COMPLETE,
+            },
         })
          
-        await ingestUsageForMessage({
-            messageId: assistantMessage.id,
-            status: "complete"
-        })
+        if(assistantMessage) {
+            await ingestUsageForMessage({
+                messageId: assistantMessage.id,
+                status: "complete"
+            })
+        }
 
         const doneEvent: ChatStreamEvent = {
             type: "done",
-            messageId: assistantMessage.id,
+            messageId: assistantMessage?.id ?? randomUUID(),
             durationMs:elapsedMs
         };
 
@@ -289,15 +388,19 @@ async function streamAIResponse (
 
         const message = err instanceof Error ? err.message:String(err);
 
-        await db.message.create({
-            data: {
-                sessionId,
-                role:"ERROR",
-                status:MessageStatus.COMPLETE,
-                model,
-                content:message,
+        await appendSessionMessage(sessionId, userId, {
+            id: randomUUID(),
+            role:"error",
+            status:MessageStatus.COMPLETE,
+            model,
+            content:message,
+            parts: [{type: "text", text: message}],
+            mode,
+            metadata: {
                 mode,
-            }
+                model,
+                status: MessageStatus.COMPLETE,
+            },
         })
 
         const  errorEvent: ChatStreamEvent = {type: "error" , message};
@@ -307,25 +410,116 @@ async function streamAIResponse (
 
 const app = new Hono<AuthenticatedEnv>()
  
+  .post("/:sessionId/regenerate" , requireCreditsBalance, async (c) => {
+    const sessionId = c.req.param("sessionId")
+    const userId = c.get("userId")
+
+    const session = await db.session.findFirst({
+         where: {id:sessionId, userId},
+    });
+
+     if(!session) {
+        return c.json({error: "Session not found"},404);
+    }
+
+    const sessionMessages = readSessionMessages(session.messages);
+    const latestUserIndex = getLatestUserMessageIndex(sessionMessages);
+    if(latestUserIndex === -1) {
+        return c.json({error: "Session has no user message to regenerate from"},409)
+    }
+
+    const userMessage = sessionMessages[latestUserIndex]!;
+    const regenerateModel = userMessage.model ?? userMessage.metadata?.model;
+    const regenerateMode = userMessage.mode ?? userMessage.metadata?.mode;
+
+    if(!regenerateModel || !regenerateMode) {
+        return c.json({error: "Session user message is missing model or mode"},409)
+    }
+
+    if(!isSupportedChatModel(regenerateModel)) {
+        return c.json({error: `Session user unsupported model: ${regenerateModel}`},409)
+    }
+
+    if(activeRegenerateSessionIds.has(sessionId)) {
+        return c.json ({
+            error: "Session already has an active regeneration"
+        },409)
+    }
+
+    const trimmedMessages = sessionMessages.slice(0, latestUserIndex + 1);
+    await db.session.update({
+        where: {id: sessionId},
+        data: {
+            messages: trimmedMessages as Prisma.InputJsonValue,
+        },
+    });
+
+    activeRegenerateSessionIds.add(sessionId)
+
+    const history = buildConversationHistory(trimmedMessages);
+    const abortController = new AbortController();
+
+    try {
+       return streamSSE(
+        c,
+        async(stream) => {
+            stream.onAbort(() => {
+                abortController.abort();
+            });
+
+            try {
+                await streamAIResponse(stream, {
+                    sessionId,
+                    userId,
+                    model : regenerateModel,
+                    cwd: getSessionCwd(session),
+                    history,
+                    mode: regenerateMode,
+                    abortController
+                });
+            } finally {
+                activeRegenerateSessionIds.delete(sessionId)
+            }
+        },
+        async (err, stream) => {
+            activeRegenerateSessionIds.delete(sessionId)
+            const message = err instanceof Error ? err.message: String(err);
+            const errorEvent: ChatStreamEvent = {type:"error", message};
+            await stream.writeSSE({event: "error", data:JSON.stringify(errorEvent)})
+        }
+    )
+    } catch(error) {
+        activeRegenerateSessionIds.delete(sessionId);
+        throw error;
+    }
+  })
+
   .post("/:sessionId/resume" , requireCreditsBalance, async (c) => {
     const sessionId = c.req.param("sessionId")
     const userId = c.get("userId")
 
     const session = await db.session.findFirst({
          where: {id:sessionId, userId},
-        include:{messages: {orderBy: {createdAt:"asc"}}}
     });
 
      if(!session) {
         return c.json({error: "Session not found"},404);
     }
-    const resumableMessage = getResumableUserMessage(session.messages)
+    const sessionMessages = readSessionMessages(session.messages);
+    const resumableMessage = getResumableUserMessage(sessionMessages)
     if(!resumableMessage) {
         return c.json({error: "Session has no pending user message to resume"},409)
     }
+
+    const resumableModel = resumableMessage.model;
+    const resumableMode = resumableMessage.mode;
+
+    if(!resumableModel || !resumableMode) {
+        return c.json({error: "Session pending user message is missing model or mode"},409)
+    }
    
-    if(!isSupportedChatModel(resumableMessage.model)) {
-        return c.json({error: `Session user unsupported model: ${resumableMessage.model}`},409)
+    if(!isSupportedChatModel(resumableModel)) {
+        return c.json({error: `Session user unsupported model: ${resumableModel}`},409)
     }
 
     if(activeResumeSessionIds.has(sessionId)) {
@@ -336,7 +530,7 @@ const app = new Hono<AuthenticatedEnv>()
 
     activeResumeSessionIds.add(sessionId)
 
-    const history = buildConversationHistory(session.messages);
+    const history = buildConversationHistory(sessionMessages);
     const abortController = new AbortController();
     
     try { 
@@ -351,10 +545,10 @@ const app = new Hono<AuthenticatedEnv>()
             await streamAIResponse(stream, {
                 sessionId,
                 userId,
-                model : resumableMessage.model,
-                cwd: session.cwd,
+                model : resumableModel,
+                cwd: getSessionCwd(session),
                 history,
-                mode: resumableMessage.mode,
+                mode: resumableMode,
                 abortController
             });
         } finally {
@@ -380,7 +574,6 @@ const app = new Hono<AuthenticatedEnv>()
 
     const session = await db.session.findFirst({
         where: {id:sessionId, userId},
-        include:{messages: {orderBy: {createdAt:"asc"}}}
     });
 
     if(!session) {
@@ -389,20 +582,32 @@ const app = new Hono<AuthenticatedEnv>()
 
     const data = c.req.valid("json");
 
-    await db.message.create({
-        data: {
-            sessionId: sessionId!,
-            role:"USER",
-            status:MessageStatus.COMPLETE,
+    const sessionMessages = readSessionMessages(session.messages);
+    const userMessage: StoredChatMessage = {
+        id: randomUUID(),
+        role:"user",
+        status:MessageStatus.COMPLETE,
+        model: data.model,
+        content : data.content,
+        parts: [{type: "text", text: data.content}],
+        mode:data.mode,
+        metadata: {
+            mode: data.mode,
             model: data.model,
-            content : data.content,
-            mode:data.mode  
+            status: MessageStatus.COMPLETE,
+        },
+    };
+
+    await db.session.update({
+        where: {id: sessionId!},
+        data: {
+            messages: [...sessionMessages, userMessage] as Prisma.InputJsonValue,
         },
     });
 
     const history =buildConversationHistory([
-        ...session.messages,// TODO limit to last 10 ,5 message
-        {role: "USER" as const, content: data.content, status:MessageStatus.COMPLETE},
+        ...sessionMessages,// TODO limit to last 10 ,5 message
+        userMessage,
     ])
 
     const abortController = new AbortController();
@@ -418,7 +623,7 @@ const app = new Hono<AuthenticatedEnv>()
                 sessionId: sessionId!,
                 userId,
                 model: data.model,
-                cwd:session.cwd,
+                cwd:getSessionCwd(session),
                 history,
                 mode: data.mode,
                 abortController,

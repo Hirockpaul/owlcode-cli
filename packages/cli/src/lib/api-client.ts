@@ -1,9 +1,10 @@
 import { hc } from "hono/client";
 import type { AppType } from "@owlcode/server";
 import { clearAuth, getAuth } from "./auth";
+import { getApiUrl } from "./env";
 
 export const apiClient = hc<AppType>(
-  process.env.API_URL ?? "http://localhost:3000",
+  getApiUrl(),
   {
     fetch: async (
       input: Parameters<typeof fetch>[0],

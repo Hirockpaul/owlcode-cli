@@ -9,6 +9,10 @@ import billing from "./routes/billing";
 
 const app = new Hono();
 
+app.get("/health", (c) =>
+  c.json({ status: "ok", service: "owlcode-api" })
+);
+
 app.onError((error, c) => {
   if (error instanceof HTTPException) {
     return c.json({ 
@@ -32,5 +36,20 @@ const routes = app
   .route("/chat", chat);
 
 export type AppType = typeof routes;
- //idleTimeout must be high, otherwise LLM tool calls might not complete
-export default { port: 3000, fetch: app.fetch, idleTimeout: 255 };
+
+const port = Number(process.env.PORT ?? 3000);
+if (!Number.isInteger(port) || port < 1 || port > 65535) {
+  throw new Error("PORT must be a valid TCP port number");
+}
+
+const hostname = "0.0.0.0";
+console.info(`OwlCode API configured to listen on ${hostname}:${port}`);
+
+// idleTimeout must be high, otherwise LLM tool calls might not complete.
+export default {
+  port,
+  hostname,
+  fetch: app.fetch,
+  idleTimeout: 255,
+  development: process.env.NODE_ENV !== "production",
+};

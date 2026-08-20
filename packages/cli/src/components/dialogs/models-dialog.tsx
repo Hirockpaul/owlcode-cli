@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useRef } from "react";
 import { useDialog } from "../../providers/dialog";
 import { DialogSearchList } from "../dialog-search-list";
-import { Mode } from "@owlcode/database/enums"
-import type { SupportedChatModelId } from "../../../../shared/src/models";
+import { Mode, type SupportedChatModelId } from "@owlcode/shared";
 
 
 type ModelsDialogContentProps = {

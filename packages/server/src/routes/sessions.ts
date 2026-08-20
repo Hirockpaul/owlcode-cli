@@ -10,6 +10,7 @@ import { requireCreditsBalance } from "../middleware/require-credits-balance";
 
 const createSessionSchema = z.object({
   title: z.string(),
+  cwd: z.string().optional(),
 });
 
 const createSessionValidator = zValidator(
@@ -57,6 +58,20 @@ const app = new Hono<AuthenticatedEnv>()
     }
 
     return c.json(session);
+  })
+  .delete("/:id", async (c) => {
+    const id = c.req.param("id");
+    const userId = c.get("userId");
+
+    const result = await db.session.deleteMany({
+      where: { id, userId },
+    });
+
+    if (result.count === 0) {
+      return c.json({ error: "Session not found" }, 404);
+    }
+
+    return c.json({ success: true });
   })
   .post("/", requireCreditsBalance, createSessionValidator, async (c) => {
     // MOCK: Uncomment to simulate slow session loading

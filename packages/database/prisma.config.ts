@@ -4,7 +4,7 @@ import dotenv from "dotenv"
 import path from "path";
 
 dotenv.config({
-  path:path.resolve(import.meta.dirname, "../../.env")
+  path:path.resolve(import.meta.dirname, "../server/.env")
 })
 export default defineConfig({
   schema: "prisma/schema.prisma",

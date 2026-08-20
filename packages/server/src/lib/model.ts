@@ -22,14 +22,6 @@ export type ResolvedModel = {
 const GOOGLE_PROVIDER_OPTIONS: Partial<
   Record<GoogleModelId, ProviderOptions>
 > = {
-  "gemini-2.5-pro": {
-    google: {
-      thinkingConfig: {
-        thinkingBudget: 1000,
-      },
-    },
-  },
-
   "gemini-2.5-flash": {
     google: {
       thinkingConfig: {
@@ -48,16 +40,7 @@ const GOOGLE_PROVIDER_OPTIONS: Partial<
 };
 
 const GROQ_PROVIDER_OPTIONS: Partial<Record<GroqModelId, ProviderOptions>> = {
-  "llama-3.3-70b-versatile": {
-    groq: { temperature: 0.6 },
-  },
-  "llama-3.1-8b-instant": {
-    groq: { temperature: 0.6 },
-  },
   "openai/gpt-oss-120b": {
-    groq: { temperature: 0.6 },
-  },
-  "meta-llama/llama-4-scout-17b-16e-instruct": {
     groq: { temperature: 0.6 },
   },
 };

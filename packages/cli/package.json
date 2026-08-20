@@ -8,10 +8,10 @@
   },
   "scripts": {
     "dev": "bun run --watch src/index.tsx",
-    "build" : "bun build src/index.tsx --outdir dist --target bun --external '@opentui/core-*'"
+    "build" : "bun build src/index.tsx --outdir dist --target bun --external '@opentui/core-*'",
+    "build:release": "bun build src/index.tsx --compile --no-compile-autoload-dotenv --outfile dist/owlcode"
   },
   "devDependencies": {
-    "@owlcode/shared": "workspace:*",
     "@types/bun": "latest",
     "@types/node": "^25.9.3",
     "@types/react": "^19.2.17"

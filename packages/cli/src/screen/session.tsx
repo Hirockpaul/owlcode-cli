@@ -19,6 +19,11 @@ import { getErrorMessage } from "../lib/http-errors";
 import { useKeyboardLayer } from "../providers/keyboard-layer";
 
 type SessionData = InferResponseType<(typeof apiClient.sessions)[":id"]["$get"], 200>;
+type MessagePart = Message["parts"][number];
+
+function isTextPart(part: MessagePart): part is MessagePart & { type: "text"; text: string } {
+  return part.type === "text" && "text" in part;
+}
 
 const sessionLocationSchema = z.object({
   session: z.custom<SessionData>((val) => val != null && typeof val === "object" && "id" in val),
@@ -32,17 +37,30 @@ const sessionLocationSchema = z.object({
 });
 
 function ChatMessage(
-  { msg }: {
-    msg: Message
+  { msg, canRegenerate, streaming, onRegenerate }: {
+    msg: Message;
+    canRegenerate?: boolean;
+    streaming?: boolean;
+    onRegenerate?: () => void;
   }
 ) {
   if (msg.role === "user") {
     const text = msg.parts
       .filter((p) => p.type === "text")
+      .filter(isTextPart)
       .map((p) => p.text)
       .join("");
 
     return <UserMessage message={text} mode={msg.metadata?.mode ?? "BUILD"} />;
+  }
+
+  if (msg.role === "error") {
+    const text = msg.parts
+      .filter(isTextPart)
+      .map((p) => p.text)
+      .join("");
+
+    return <ErrorMessage message={text} onRetry={onRegenerate} />;
   }
 
   return (
@@ -51,7 +69,9 @@ function ChatMessage(
       model={msg.metadata?.model ?? "unknown"}
       mode={msg.metadata?.mode ?? "BUILD"}
       durationMs={msg.metadata?.durationMs}
-      streaming={false}
+      streaming={streaming}
+      canRegenerate={canRegenerate}
+      onRegenerate={onRegenerate}
     />
   );
 };
@@ -66,7 +86,7 @@ function SessionChat({
   const [initialMessages] = useState(() => session.messages as unknown as Message[]);
   const { mode, model } = usePromptConfig();
   const { isTopLayer } = useKeyboardLayer();
-  const { messages, status, submit, abort, interrupt, error } = useChat(
+  const { messages, status, submit, abort, interrupt, error, regenerateLast } = useChat(
     session.id,
     initialMessages
   );
@@ -81,7 +101,11 @@ function SessionChat({
 
   // Let the user cancel a reply even before the first streamed chunk arrives.
   useKeyboard((key) => {
-    if (key.name === "escape" && isTopLayer("base") && status === "streaming") {
+    if (
+      key.name === "escape" 
+      && isTopLayer("base") 
+      && (status === "submitted" || status === "streaming")
+    ) {
       key.preventDefault();
       interrupt();
     }
@@ -103,10 +127,21 @@ function SessionChat({
       loading={status === "submitted" || status === "streaming"}
       interruptible={status === "submitted" || status === "streaming"}
     >
-      {messages.map((msg) => (
-        <ChatMessage key={msg.id} msg={msg} />
-      ))}
-      {error && <ErrorMessage message={error.message} />}
+      {messages.map((msg, index) => {
+        const isLastMessage = index === messages.length - 1;
+        const isBusy = status === "submitted" || status === "streaming";
+
+        return (
+          <ChatMessage 
+            key={msg.id} 
+            msg={msg} 
+            streaming={isLastMessage && isBusy}
+            canRegenerate={isLastMessage && msg.role === "assistant" && !isBusy}
+            onRegenerate={regenerateLast}
+          />
+        );
+      })}
+      {error && <ErrorMessage message={error.message} onRetry={regenerateLast} />}
     </SessionShell>
   );
 }

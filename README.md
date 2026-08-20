@@ -50,39 +50,23 @@ A powerful terminal-based AI coding assistant with support for multiple AI model
 
 2. **Initialize the database**
    ```bash
+   bun run --cwd packages/database db:push
    bun run --cwd packages/database db:generate
    ```
 
 ## Environment Variables
 
-Create a `.env` file in the root directory with the following variables:
+Configuration is separated by runtime. Copy the relevant example files for local development:
 
-```env
-# Server
-API_URL=http://localhost:3000
-PORT=3000
-
-# Database
-DATABASE_URL=postgresql://user:password@localhost:5432/owlcode
-
-# Authentication
-JWT_SECRET=your_jwt_secret_key
-CLERK_FRONTEND_API=your_clerk_frontend_api
-CLERK_OAUTH_CLIENT_ID=your_client_id
-CLERK_OAUTH_CLIENT_SECRET=your_client_secret
-CLERK_PUBLISHABLE_KEY=your_publishable_key
-CLERK_SECRET_KEY=your_secret_key
-
-# AI Providers
-GOOGLE_API_KEY=your_google_api_key
-GROQ_API_KEY=your_groq_api_key
-
-# Billing
-POLAR_ACCESS_TOKEN=your_polar_token
-POLAR_PRODUCT_ID=your_product_id
-POLAR_SERVER=sandbox
-POLAR_CREDITS_METER_ID=owlcode_credits
+```bash
+cp packages/cli/.env.example packages/cli/.env
+cp packages/server/.env.example packages/server/.env
 ```
+
+The CLI file contains only public client configuration, including
+`OWLCODE_API_URL`. The server file contains database, AI provider, Clerk,
+Polar, and server runtime configuration. Never place server secrets in the CLI
+environment.
 
 ## Development
 
@@ -127,7 +111,8 @@ OwlCode uses **Clerk OAuth** for authentication. To set up:
    ```
    http://localhost:3000/auth/callback
    ```
-3. Copy your API keys to the `.env` file
+3. Add the public Clerk frontend API and OAuth client ID to `packages/cli/.env`,
+   and add the Clerk server keys to `packages/server/.env`.
 
 ## Billing
 
@@ -151,6 +136,7 @@ OwlCode meters AI usage with **Polar credits**. Each API call consumes credits f
 | `bun run dev:server` | Start API server with hot-reload |
 | `bun run build:cli` | Build the CLI executable |
 | `bun run link:cli` | Build and link CLI executable |
+| `bun run --cwd packages/database db:push` | Sync Prisma schema to the database |
 | `bun run --cwd packages/database db:generate` | Generate Prisma client |
 
 ## Building for Production
@@ -179,7 +165,7 @@ docker run -e DATABASE_URL=<url> -e CLERK_SECRET_KEY=<key> ... -p 3000:3000 owlc
 **Required environment variables at runtime:**
 - `DATABASE_URL`
 - `CLERK_SECRET_KEY`
-- `GOOGLE_API_KEY`
+- `GOOGLE_GENERATIVE_AI_API_KEY`
 - `GROQ_API_KEY`
 - `POLAR_ACCESS_TOKEN`
 - `PORT`
@@ -195,5 +181,3 @@ docker run -e DATABASE_URL=<url> -e CLERK_SECRET_KEY=<key> ... -p 3000:3000 owlc
 - **Auth**: Clerk
 - **Billing**: Polar
 - **Monitoring**: Sentry
-
-

@@ -1,8 +1,8 @@
 import open from "open";
 import { saveAuth } from "./auth";
+import { getApiUrl } from "./env";
 
 const LOGIN_TIMEOUT_MS = 5 * 60 * 1000;
-const API_URL = process.env.API_URL ?? "http://localhost:3000";
 
 type OAuthState = {
   nonce: string;
@@ -99,7 +99,7 @@ export async function performLogin() {
 
         try {
           // Must match exactly what was sent in the authorize URL
-          const redirectUri = `${API_URL}/auth/callback`;
+          const redirectUri = `${getApiUrl()}/auth/callback`;
 
           const tokenRes = await fetch(`${clerkFrontendApi}/oauth/token`, {
             method: "POST",
@@ -147,7 +147,7 @@ export async function performLogin() {
     const state = encodeState({ port, nonce });
 
     // Fixed redirect URI pointing to API server (must be registered in Clerk dashboard)
-    const redirectUri = `${API_URL}/auth/callback`;
+    const redirectUri = `${getApiUrl()}/auth/callback`;
 
     const authorizeUrl = new URL(`${clerkFrontendApi}/oauth/authorize`);
     authorizeUrl.searchParams.set("response_type", "code");

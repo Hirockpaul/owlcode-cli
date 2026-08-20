@@ -13,6 +13,7 @@ type Session = InferResponseType<(typeof apiClient.sessions)["$get"],200>[number
 
 export const SessionsDialogContent = () => {
  const [sessions, setSessions] = useState<Session[]>([]);
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const { close } = useDialog();
   const navigate = useNavigate();
@@ -60,6 +61,46 @@ export const SessionsDialogContent = () => {
     [close, navigate],
   );
 
+  const handleDelete = useCallback(
+    async (session: Session) => {
+      try {
+        const res = await apiClient.sessions[":id"].$delete({
+          param: { id: session.id },
+        });
+
+        if (!res.ok) {
+          throw new Error(await getErrorMessage(res));
+        }
+
+        setSessions((current) => current.filter((item) => item.id !== session.id));
+        setPendingDeleteId(null);
+        show({ variant: "success", message: "Session deleted" });
+      } catch (error) {
+        show({
+          variant: "error",
+          message: error instanceof Error ? error.message : "Failed to delete session",
+        });
+      }
+    },
+    [show],
+  );
+
+  const handleDeleteRequest = useCallback(
+    (session: Session) => {
+      if (pendingDeleteId !== session.id) {
+        setPendingDeleteId(session.id);
+        show({
+          variant: "info",
+          message: "Press Ctrl+D again or click Confirm delete",
+        });
+        return;
+      }
+
+      void handleDelete(session);
+    },
+    [handleDelete, pendingDeleteId, show],
+  );
+
   if (loading) {
     return (
       <box flexDirection="column">
@@ -72,6 +113,12 @@ export const SessionsDialogContent = () => {
     <DialogSearchList
       items={sessions}
       onSelect={handleSelect}
+      onDelete={handleDeleteRequest}
+      onHighlight={(session) => {
+        if (pendingDeleteId && pendingDeleteId !== session.id) {
+          setPendingDeleteId(null);
+        }
+      }}
       filterFn={(s, query) => s.title.toLowerCase().includes(query.toLowerCase())}
       renderItem={(session, isSelected) => (
         <box flexDirection="row" flexGrow={1} width="100%">
@@ -81,6 +128,20 @@ export const SessionsDialogContent = () => {
             </text>
           </box>
           <box flexShrink={0}>
+            {isSelected && (
+              <text 
+                selectable={false} 
+                fg="black"
+                onMouseDown={(event) => {
+                  event.stopPropagation();
+                  handleDeleteRequest(session);
+                }}
+              >
+                {pendingDeleteId === session.id ? "Confirm delete" : "Delete Ctrl+D"}
+              </text>
+            )}
+          </box>
+          <box flexShrink={0} paddingLeft={isSelected ? 2 : 0}>
             <text
               selectable={false}
               fg={isSelected ? "black" : undefined}

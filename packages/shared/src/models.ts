@@ -32,42 +32,9 @@ export const SUPPORTED_CHAT_MODELS = [
       outputUsdPerMillionTokens: 0,
     },
   },
-  {
-    id: "gemini-2.5-pro",
-    provider: "google",
-    pricing: {
-      inputUsdPerMillionTokens: 0,
-      outputUsdPerMillionTokens: 0,
-    },
-  },
-
   // Groq
   {
-    id: "llama-3.3-70b-versatile",
-    provider: "groq",
-    pricing: {
-      inputUsdPerMillionTokens: 0,
-      outputUsdPerMillionTokens: 0,
-    },
-  },
-  {
-    id: "llama-3.1-8b-instant",
-    provider: "groq",
-    pricing: {
-      inputUsdPerMillionTokens: 0,
-      outputUsdPerMillionTokens: 0,
-    },
-  },
-  {
   id: "openai/gpt-oss-120b",
-  provider: "groq",
-  pricing: {
-    inputUsdPerMillionTokens: 0,
-    outputUsdPerMillionTokens: 0,
-  },
-},
-{
-  id: "meta-llama/llama-4-scout-17b-16e-instruct",
   provider: "groq",
   pricing: {
     inputUsdPerMillionTokens: 0,

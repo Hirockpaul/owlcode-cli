@@ -35,7 +35,6 @@
         "zod": "^4.4.3",
       },
       "devDependencies": {
-        "@owlcode/shared": "workspace:*",
         "@types/bun": "latest",
         "@types/node": "^25.9.3",
         "@types/react": "^19.2.17",

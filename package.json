@@ -3,10 +3,11 @@
   "version": "1.0.0",
   "workspaces": ["packages/*"],
   "scripts": {
-    "dev": "bun run --watch packages/cli/src/index.tsx",
-    "dev:server": "bun run --hot packages/server/src/index.ts",
-    "dev:cli": "cd packages/cli && bun run dev",
+    "dev": "bun run --cwd packages/cli dev",
+    "dev:server": "bun --env-file=../../.env run --cwd packages/server dev",
+    "dev:cli": "bun run --cwd packages/cli dev",
     "build:cli": "bun run --filter @owlcode/cli build",
+    "build:cli:release": "bun run --filter @owlcode/cli build:release",
     "link:cli": "bun run build:cli && cd packages/cli && bun link"
   },
   "devDependencies": {

@@ -1,7 +1,7 @@
 {
     "name": "@owlcode/shared",
     "type": "module",
-    "private": "true",
+    "private": true,
     "exports": {
         ".": "./src/index.ts"
     },

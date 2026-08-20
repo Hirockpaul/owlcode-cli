@@ -3,6 +3,7 @@
   "compilerOptions": {
     "jsx": "react-jsx",
     "jsxImportSource": "@opentui/react",
+    "resolveJsonModule": true,
     "types": ["@opentui/react", "node"]
   }
 }

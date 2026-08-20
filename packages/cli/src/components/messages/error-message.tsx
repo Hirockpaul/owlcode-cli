@@ -3,10 +3,11 @@ import { useTheme } from "../../providers/theme";
 import { EmptyBorder } from "../border";
 
 type Props =  {
-    message : string
+    message : string;
+    onRetry?: () => void;
 }
 
-export function ErrorMessage({message}: Props ) {
+export function ErrorMessage({message, onRetry}: Props ) {
     const { colors } = useTheme();
 
 return (
@@ -31,6 +32,24 @@ return (
         <text attributes={TextAttributes.DIM}>{message}</text>
 
      </box>
+     {onRetry && (
+      <box paddingX={2} paddingBottom={1}>
+       <box
+        flexDirection="row"
+        paddingX={1}
+        border={["left", "right"]}
+        borderColor={colors.error}
+        customBorderChars={EmptyBorder}
+        onMouseDown={() => {
+          onRetry();
+        }}
+       >
+        <text selectable={false} fg={colors.error} attributes={TextAttributes.BOLD}>
+          Retry response
+        </text>
+       </box>
+      </box>
+     )}
 
     </box>
 
