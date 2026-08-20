@@ -4,6 +4,21 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing release tag to rebuild (for example, v1.0.0)
+        required: true
+        type: string
+      force:
+        description: Delete and replace the exact existing release prefix
+        required: true
+        default: false
+        type: boolean
+      confirm_release_tag:
+        description: Retype the release tag when force is enabled
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -11,12 +26,20 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
+    concurrency:
+      group: release-${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
+      cancel-in-progress: false
     env:
       AWS_REGION: ${{ vars.AWS_REGION }}
       S3_BUCKET: ${{ vars.S3_BUCKET }}
       GPG_KEY_ID: ${{ vars.GPG_KEY_ID }}
+      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
+      FORCE_RELEASE: ${{ github.event_name == 'workflow_dispatch' && inputs.force || false }}
+      CONFIRM_RELEASE_TAG: ${{ inputs.confirm_release_tag || '' }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && format('refs/tags/{0}', inputs.release_tag) || github.ref }}
 
       - uses: oven-sh/setup-bun@v2
         with:
@@ -40,9 +63,21 @@ jobs:
       - name: Validate tag version
         run: |
           set -euo pipefail
+          if [[ ! "$RELEASE_TAG" =~ ^v[0-9A-Za-z][0-9A-Za-z.-]*$ ]]; then
+            echo "::error::Invalid release tag: ${RELEASE_TAG}"
+            exit 1
+          fi
+          if ! git tag --points-at HEAD --list "$RELEASE_TAG" | grep -Fxq "$RELEASE_TAG"; then
+            echo "::error::Checked-out commit is not tagged ${RELEASE_TAG}"
+            exit 1
+          fi
           package_version="$(bun -p 'require("./package.json").version')"
-          if [ "${GITHUB_REF_NAME}" != "v${package_version}" ]; then
-            echo "::error::Tag ${GITHUB_REF_NAME} does not match package.json version ${package_version}"
+          if [ "$RELEASE_TAG" != "v${package_version}" ]; then
+            echo "::error::Tag ${RELEASE_TAG} does not match package.json version ${package_version}"
+            exit 1
+          fi
+          if [ "$FORCE_RELEASE" = "true" ] && [ "$CONFIRM_RELEASE_TAG" != "$RELEASE_TAG" ]; then
+            echo "::error::Force release requires confirm_release_tag to exactly match ${RELEASE_TAG}"
             exit 1
           fi
 
@@ -104,8 +139,8 @@ jobs:
       - name: Upload immutable release
         run: |
           set -euo pipefail
-          prefix="releases/${GITHUB_REF_NAME}/"
-          version="${GITHUB_REF_NAME#v}"
+          prefix="releases/${RELEASE_TAG}/"
+          version="${RELEASE_TAG#v}"
           files=(
             "dist/owlcode_${version}_linux_x64.tar.gz"
             "dist/owlcode_${version}_linux_arm64.tar.gz"
@@ -122,11 +157,6 @@ jobs:
             fi
           done
 
-          expected_keys=()
-          for file in "${files[@]}"; do
-            expected_keys+=("${prefix}$(basename "$file")")
-          done
-
           mapfile -t existing_keys < <(
             aws s3api list-objects-v2 \
               --bucket "$S3_BUCKET" \
@@ -135,28 +165,12 @@ jobs:
               --output text | tr '\t' '\n' | sed '/^None$/d; /^$/d'
           )
           if [ "${#existing_keys[@]}" -ne 0 ]; then
-            matched=0
-            for key in "${existing_keys[@]}"; do
-              is_expected=false
-              for expected_key in "${expected_keys[@]}"; do
-                if [ "$key" = "$expected_key" ]; then
-                  is_expected=true
-                  matched=$((matched + 1))
-                  break
-                fi
-              done
-              if [ "$is_expected" = false ]; then
-                echo "::error::Refusing to modify release prefix containing unexpected object: s3://${S3_BUCKET}/${key}"
-                exit 1
-              fi
-            done
-
-            if [ "$matched" -eq "${#expected_keys[@]}" ]; then
-              echo "::error::Refusing to overwrite complete release s3://${S3_BUCKET}/${prefix}"
+            if [ "$FORCE_RELEASE" != "true" ]; then
+              echo "::error::Refusing to overwrite existing release s3://${S3_BUCKET}/${prefix}"
               exit 1
             fi
 
-            echo "Recovering partial release s3://${S3_BUCKET}/${prefix} (${matched}/${#expected_keys[@]} expected objects present)"
+            echo "Force release explicitly confirmed; replacing s3://${S3_BUCKET}/${prefix}"
             for key in "${existing_keys[@]}"; do
               aws s3api delete-object --bucket "$S3_BUCKET" --key "$key"
             done

@@ -112,24 +112,22 @@ required.
 
 ## Immutability and publication
 
-Completed releases under `releases/v<VERSION>/` are write-once. The release
-process uses the seven exact artifact names above to distinguish a complete
-release from an interrupted upload:
+Objects under `releases/v<VERSION>/` are write-once during normal tag-triggered
+publication:
 
-1. An empty exact version prefix is uploaded normally.
-2. A prefix containing all seven expected objects is complete, so publication
-   fails without deleting or overwriting anything.
-3. A prefix containing only a subset of the seven expected objects is an
-   interrupted upload. Only those exact keys are deleted before retrying.
-4. A prefix containing any unexpected key fails without deleting anything.
-5. Never use S3 sync options that delete or replace versioned release objects.
-6. Fix a completed release only by incrementing the root package version and
+1. Fail normal publication if the exact version prefix contains any object.
+2. Upload final archives, manifest, and signature without overwriting keys.
+3. Never use S3 sync options that delete or replace versioned release objects.
+4. Fix a published release by incrementing the root package version and
    publishing a new prefix.
 
-`s3:DeleteObject` is needed only for interrupted-upload recovery and remains
-restricted to `releases/*` by the IAM resource. The workflow further restricts
-deletion to keys returned from the exact `releases/v<VERSION>/` prefix after
-confirming that every returned key is an expected artifact.
+For a known broken or test release, the workflow can be started manually with
+`force` enabled. Force mode also requires `confirm_release_tag` to exactly
+match `release_tag`; it deletes and replaces objects only under that exact
+version prefix. Tag-triggered workflows can never enable force mode.
+
+`s3:DeleteObject` is needed only for this explicitly confirmed force operation
+and remains restricted to `releases/*` by the IAM resource.
 
 Least-privilege CI permissions should enforce this workflow where practical.
 S3 Object Lock would require an explicit bucket-level architecture decision;
