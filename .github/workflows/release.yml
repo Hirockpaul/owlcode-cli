@@ -104,18 +104,64 @@ jobs:
       - name: Upload immutable release
         run: |
           set -euo pipefail
-          prefix="releases/${GITHUB_REF_NAME}"
-          existing="$(aws s3api list-objects-v2 --bucket "$S3_BUCKET" --prefix "${prefix}/" --max-items 1 --query 'KeyCount' --output text)"
-          if [ "$existing" != "0" ]; then
-            echo "::error::Refusing to overwrite existing release s3://${S3_BUCKET}/${prefix}/"
-            exit 1
-          fi
-          shopt -s nullglob
-          files=(dist/*.tar.gz dist/*.zip dist/release-manifest.json dist/release-manifest.json.asc)
-          if [ "${#files[@]}" -ne 7 ]; then
-            echo "::error::Expected 5 archives, a manifest, and a signature; found ${#files[@]} files"
-            exit 1
-          fi
+          prefix="releases/${GITHUB_REF_NAME}/"
+          version="${GITHUB_REF_NAME#v}"
+          files=(
+            "dist/owlcode_${version}_linux_x64.tar.gz"
+            "dist/owlcode_${version}_linux_arm64.tar.gz"
+            "dist/owlcode_${version}_windows_x64.zip"
+            "dist/owlcode_${version}_macos_x64.tar.gz"
+            "dist/owlcode_${version}_macos_arm64.tar.gz"
+            dist/release-manifest.json
+            dist/release-manifest.json.asc
+          )
           for file in "${files[@]}"; do
-            aws s3 cp "$file" "s3://${S3_BUCKET}/${prefix}/$(basename "$file")" --only-show-errors
+            if [ ! -s "$file" ]; then
+              echo "::error::Expected release artifact is missing or empty: ${file}"
+              exit 1
+            fi
+          done
+
+          expected_keys=()
+          for file in "${files[@]}"; do
+            expected_keys+=("${prefix}$(basename "$file")")
+          done
+
+          mapfile -t existing_keys < <(
+            aws s3api list-objects-v2 \
+              --bucket "$S3_BUCKET" \
+              --prefix "$prefix" \
+              --query 'Contents[].Key' \
+              --output text | tr '\t' '\n' | sed '/^None$/d; /^$/d'
+          )
+          if [ "${#existing_keys[@]}" -ne 0 ]; then
+            matched=0
+            for key in "${existing_keys[@]}"; do
+              is_expected=false
+              for expected_key in "${expected_keys[@]}"; do
+                if [ "$key" = "$expected_key" ]; then
+                  is_expected=true
+                  matched=$((matched + 1))
+                  break
+                fi
+              done
+              if [ "$is_expected" = false ]; then
+                echo "::error::Refusing to modify release prefix containing unexpected object: s3://${S3_BUCKET}/${key}"
+                exit 1
+              fi
+            done
+
+            if [ "$matched" -eq "${#expected_keys[@]}" ]; then
+              echo "::error::Refusing to overwrite complete release s3://${S3_BUCKET}/${prefix}"
+              exit 1
+            fi
+
+            echo "Recovering partial release s3://${S3_BUCKET}/${prefix} (${matched}/${#expected_keys[@]} expected objects present)"
+            for key in "${existing_keys[@]}"; do
+              aws s3api delete-object --bucket "$S3_BUCKET" --key "$key"
+            done
+          fi
+
+          for file in "${files[@]}"; do
+            aws s3 cp "$file" "s3://${S3_BUCKET}/${prefix}$(basename "$file")" --only-show-errors
           done
