@@ -1,0 +1,95 @@
+name: Release CLI to S3
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      S3_BUCKET: ${{ vars.S3_BUCKET }}
+      GPG_KEY_ID: ${{ vars.GPG_KEY_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.14"
+
+      - name: Validate release configuration
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          for name in AWS_REGION S3_BUCKET GPG_KEY_ID AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY GPG_PRIVATE_KEY; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::Required GitHub secret or variable is not configured: ${name}"
+              exit 1
+            fi
+          done
+
+      - name: Validate tag version
+        run: |
+          set -euo pipefail
+          package_version="$(bun -p 'require("./package.json").version')"
+          if [ "${GITHUB_REF_NAME}" != "v${package_version}" ]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} does not match package.json version ${package_version}"
+            exit 1
+          fi
+
+      - name: Install dependencies for all release targets
+        run: bun install --frozen-lockfile --os="*" --cpu="*"
+
+      - name: Build and verify standalone executables
+        run: bun run release:build
+
+      - name: Generate SHA-256 release manifest
+        run: bun run release:manifest
+
+      - name: Import signing key and sign manifest
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          key_file="$(mktemp)"
+          trap 'rm -f -- "$key_file"' EXIT
+          chmod 600 "$key_file"
+          printf '%s' "$GPG_PRIVATE_KEY" > "$key_file"
+          gpg --batch --import "$key_file" >/dev/null 2>&1
+          gpg --batch --yes --armor --local-user "$GPG_KEY_ID" \
+            --detach-sign --output dist/release-manifest.json.asc dist/release-manifest.json
+          gpg --batch --verify dist/release-manifest.json.asc dist/release-manifest.json
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Upload immutable release
+        run: |
+          set -euo pipefail
+          prefix="releases/${GITHUB_REF_NAME}"
+          existing="$(aws s3api list-objects-v2 --bucket "$S3_BUCKET" --prefix "${prefix}/" --max-items 1 --query 'KeyCount' --output text)"
+          if [ "$existing" != "0" ]; then
+            echo "::error::Refusing to overwrite existing release s3://${S3_BUCKET}/${prefix}/"
+            exit 1
+          fi
+          shopt -s nullglob
+          files=(dist/*.tar.gz dist/*.zip dist/release-manifest.json dist/release-manifest.json.asc)
+          if [ "${#files[@]}" -ne 7 ]; then
+            echo "::error::Expected 5 archives, a manifest, and a signature; found ${#files[@]} files"
+            exit 1
+          fi
+          for file in "${files[@]}"; do
+            aws s3 cp "$file" "s3://${S3_BUCKET}/${prefix}/$(basename "$file")" --only-show-errors
+          done

@@ -8,6 +8,8 @@
     "dev:cli": "bun run --cwd packages/cli dev",
     "build:cli": "bun run --filter @owlcode/cli build",
     "build:cli:release": "bun run --filter @owlcode/cli build:release",
+    "release:build": "bash scripts/build-release.sh",
+    "release:manifest": "bun scripts/generate-manifest.mjs",
     "link:cli": "bun run build:cli && cd packages/cli && bun link"
   },
   "devDependencies": {
