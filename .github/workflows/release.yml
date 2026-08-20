@@ -46,6 +46,10 @@ jobs:
           fi
 
       - name: Install dependencies for all release targets
+        # Prisma loads datasource configuration during client generation, but
+        # `prisma generate` does not connect to this build-only database URL.
+        env:
+          DATABASE_URL: postgresql://build:build@localhost:5432/build
         run: bun install --frozen-lockfile --os="*" --cpu="*"
 
       - name: Build and verify standalone executables
