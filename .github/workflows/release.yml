@@ -27,9 +27,10 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
         run: |
           set -euo pipefail
-          for name in AWS_REGION S3_BUCKET GPG_KEY_ID AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY GPG_PRIVATE_KEY; do
+          for name in AWS_REGION S3_BUCKET GPG_KEY_ID AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY GPG_PRIVATE_KEY GPG_PASSPHRASE; do
             if [ -z "${!name:-}" ]; then
               echo "::error::Required GitHub secret or variable is not configured: ${name}"
               exit 1
@@ -61,14 +62,25 @@ jobs:
       - name: Import signing key and sign manifest
         env:
           GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
         run: |
           set -euo pipefail
           key_file="$(mktemp)"
           trap 'rm -f -- "$key_file"' EXIT
           chmod 600 "$key_file"
           printf '%s' "$GPG_PRIVATE_KEY" > "$key_file"
-          gpg --batch --import "$key_file" >/dev/null 2>&1
-          gpg --batch --yes --armor --local-user "$GPG_KEY_ID" \
+          gpg --batch --import "$key_file"
+
+          expected_fingerprint="$(printf '%s' "$GPG_KEY_ID" | tr -d '[:space:]' | tr '[:lower:]' '[:upper:]')"
+          if ! gpg --batch --with-colons --list-secret-keys "$expected_fingerprint" | \
+            awk -F: -v expected="$expected_fingerprint" \
+              '$1 == "fpr" && toupper($10) == expected { found = 1 } END { exit !found }'; then
+            echo "::error::Imported private key does not contain the configured GPG_KEY_ID"
+            exit 1
+          fi
+
+          gpg --batch --yes --armor --pinentry-mode loopback \
+            --passphrase "$GPG_PASSPHRASE" --local-user "$expected_fingerprint" \
             --detach-sign --output dist/release-manifest.json.asc dist/release-manifest.json
           gpg --batch --verify dist/release-manifest.json.asc dist/release-manifest.json
 
