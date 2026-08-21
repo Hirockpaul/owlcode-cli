@@ -1,138 +1,104 @@
-# S3 CLI release structure
+# OwlCode CLI release and installation architecture
 
-OwlCode CLI releases are stored in the S3 bucket configured through the
-`S3_BUCKET` GitHub variable, in the region configured by `AWS_REGION`.
-The bucket name is not part of an object key.
+OwlCode publishes signed CLI archives to the private S3 bucket
+`owlcode-cli-releases-441870953577-ap-south-1-an` in `ap-south-1`. Block Public
+Access remains enabled. Users never receive AWS credentials and do not download
+directly from a public bucket.
 
-`install.sh` downloads over HTTPS. Keep the bucket private and expose the
-release objects through an appropriately secured HTTPS distribution, setting
-`OWLCODE_RELEASE_BASE_URL` to its base URL. Direct S3 URLs only work when a
-bucket policy intentionally permits downloads; the release IAM user's access
-keys must never be distributed to installers.
-
-## GitHub configuration
-
-Configure these repository secrets before publishing:
+## Release objects
 
 ```text
-AWS_ACCESS_KEY_ID=<SET_IN_GITHUB_SECRETS>
-AWS_SECRET_ACCESS_KEY=<SET_IN_GITHUB_SECRETS>
-GPG_PRIVATE_KEY=<SET_IN_GITHUB_SECRETS>
+owlcode-cli-releases-441870953577-ap-south-1-an/
+├── install.sh
+├── owlcode-signing-key.asc
+├── version.txt
+└── releases/v<VERSION>/
+    ├── owlcode_<VERSION>_linux_x64.tar.gz
+    ├── owlcode_<VERSION>_linux_arm64.tar.gz
+    ├── owlcode_<VERSION>_windows_x64.zip
+    ├── owlcode_<VERSION>_macos_x64.tar.gz
+    ├── owlcode_<VERSION>_macos_arm64.tar.gz
+    ├── release-manifest.json
+    └── release-manifest.json.asc
 ```
 
-Configure these repository variables:
+`release-manifest.json` records the version plus the filename, byte size, and
+SHA-256 digest of each of the five archives. Its detached `.asc` signature is
+created by the configured private GPG key. Only the public key is distributed.
+
+## Publishing
+
+The release workflow runs for `v*` tags and verifies that the tag exactly
+matches root `package.json` (`v1.0.2` ↔ `1.0.2`). It builds all targets,
+generates and signs the manifest, then publishes to `releases/v<VERSION>/`.
+
+Normal releases are immutable: if any object exists in that prefix, publishing
+fails. A manual workflow dispatch may replace only that prefix after both
+`force: true` and exact `confirm_release_tag` confirmation. Do not remove this
+guard.
+
+GitHub Actions authenticates with OIDC, not long-lived AWS keys. Configure the
+release-role ARN in the `AWS_RELEASE_ROLE_ARN` repository variable (account
+`441870953577`). Its trust policy must restrict the GitHub OIDC subject to
+`repo:Hirockpaul/owlcode-cli` and the `release` environment. The workflow
+needs `id-token: write` and `contents: read` permissions.
+
+The role policy should be limited to `s3:ListBucket`, `s3:GetObject`, and
+`s3:PutObject` for the bucket/release prefix. `s3:DeleteObject` is permitted
+only for the explicit force-release path. Do not grant `s3:*` or `Resource: *`.
+
+The release role also needs `s3:PutObject` for the three root distribution
+objects (`install.sh`, `owlcode-signing-key.asc`, and `version.txt`). The
+server runtime role needs only `s3:GetObject` for those objects and
+`releases/*` in order to presign downloads.
+
+## Download API
+
+The deployed OwlCode server has these public routes:
 
 ```text
-AWS_REGION=<AWS_REGION>
-S3_BUCKET=<S3_BUCKET>
-GPG_KEY_ID=<GPG_KEY_ID>
+GET /downloads/owlcode-signing-key.asc
+GET /downloads/releases/:version/release-manifest.json
+GET /downloads/releases/:version/release-manifest.json.asc
+GET /downloads/releases/:version/:filename
 ```
 
-The access keys belong to a dedicated IAM user. Replace `<S3_BUCKET>` below
-with the same bucket configured in the `S3_BUCKET` GitHub variable and attach
-this policy to that user (not to a role):
+The server normalizes `v1.0.2` to `1.0.2`, accepts only strict SemVer releases,
+and accepts only the two metadata files or one of the five generated archive
+names for that version. It constructs the S3 key internally, generates a
+five-minute `GetObject` presigned URL, and returns a `307` redirect. The API
+never proxies archive bytes and has no arbitrary-S3-key endpoint.
 
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Sid": "ListOwlCodeReleases",
-      "Effect": "Allow",
-      "Action": "s3:ListBucket",
-      "Resource": "arn:aws:s3:::<S3_BUCKET>",
-      "Condition": {
-        "StringLike": {
-          "s3:prefix": ["releases/*"]
-        }
-      }
-    },
-    {
-      "Sid": "PublishOwlCodeReleases",
-      "Effect": "Allow",
-      "Action": [
-        "s3:PutObject",
-        "s3:DeleteObject"
-      ],
-      "Resource": "arn:aws:s3:::<S3_BUCKET>/releases/*"
-    }
-  ]
-}
-```
-
-The current workflow does not read uploaded objects, so the release IAM user
-does not need `s3:GetObject`. Add that action, scoped to
-`arn:aws:s3:::<S3_BUCKET>/releases/*`, only if a future workflow performs
-post-upload reads. Do not attach `AdministratorAccess`. This workflow
-intentionally does not use GitHub OIDC or an IAM role.
-
-## Object keys
-
-Each release uses the authoritative version from the repository root
-`package.json` and the five platforms produced by
-`scripts/build-release.sh`:
+Server configuration:
 
 ```text
-releases/v<VERSION>/
-├── owlcode_<VERSION>_linux_x64.tar.gz
-├── owlcode_<VERSION>_linux_arm64.tar.gz
-├── owlcode_<VERSION>_windows_x64.zip
-├── owlcode_<VERSION>_macos_x64.tar.gz
-├── owlcode_<VERSION>_macos_arm64.tar.gz
-├── release-manifest.json
-└── release-manifest.json.asc
+AWS_REGION=ap-south-1
+S3_BUCKET=owlcode-cli-releases-441870953577-ap-south-1-an
 ```
 
-For every future version `<VERSION>`, artifacts use these rules:
+The deployed server must receive AWS credentials through its IAM role or other
+server-side temporary credential mechanism. Never configure these credentials
+in the CLI, installer, release manifest, or public repository.
 
-```text
-Prefix:  releases/v<VERSION>/
-Windows: owlcode_<VERSION>_<platform>_<arch>.zip
-Unix:    owlcode_<VERSION>_<platform>_<arch>.tar.gz
+## Installer
+
+The Linux/macOS shell installer downloads through the API, verifies the public
+key's full 40-character fingerprint in an isolated `GNUPGHOME`, verifies the
+detached manifest signature, validates artifact name/size/SHA-256, validates
+the archive contains only the expected executable, verifies `owlcode
+--version`, and atomically installs it.
+
+```bash
+DOWNLOAD_BASE="https://<deployed-owlcode-api>/downloads" \
+OWLCODE_GPG_KEY_FINGERPRINT="<actual-40-character-fingerprint>" \
+./install.sh 1.0.2
 ```
 
-The archive contains only the executable and any runtime files it actually
-requires. It must not contain source files, `.env` files, credentials, private
-keys, or signing keys.
+`DOWNLOAD_BASE` is the only distribution URL required by the installer. The
+installed CLI uses `OWLCODE_API_URL` for normal runtime API calls. S3 is only
+release storage; the runtime CLI does not use it.
 
-## Manifest and signature
-
-Each immutable version prefix contains `release-manifest.json`, with the
-version and the filename, byte size, and SHA-256 digest calculated from every
-artifact actually published. Checksums and sizes must be generated from the
-final archives; placeholder values are forbidden.
-
-`release-manifest.json.asc` is a detached signature of that exact manifest.
-Signing infrastructure and trusted public-key distribution must be established
-before the first upload. The private signing key must never enter S3, Git, the
-CLI executable, a Docker image, or CI logs.
-
-The installer accepts an explicit version, so no mutable `latest/` objects are
-required.
-
-## Immutability and publication
-
-Objects under `releases/v<VERSION>/` are write-once during normal tag-triggered
-publication:
-
-1. Fail normal publication if the exact version prefix contains any object.
-2. Upload final archives, manifest, and signature without overwriting keys.
-3. Never use S3 sync options that delete or replace versioned release objects.
-4. Fix a published release by incrementing the root package version and
-   publishing a new prefix.
-
-For a known broken or test release, the workflow can be started manually with
-`force` enabled. Force mode also requires `confirm_release_tag` to exactly
-match `release_tag`; it deletes and replaces objects only under that exact
-version prefix. Tag-triggered workflows can never enable force mode.
-
-`s3:DeleteObject` is needed only for this explicitly confirmed force operation
-and remains restricted to `releases/*` by the IAM resource.
-
-Least-privilege CI permissions should enforce this workflow where practical.
-S3 Object Lock would require an explicit bucket-level architecture decision;
-until then, immutability is enforced by the publishing process and IAM policy.
-
-The bucket remains private with Block Public Access enabled and ACLs disabled.
-This design does not add a public bucket policy, upload objects, or create any
-other AWS resource.
+The public signing-key fingerprint must be copied from the actual configured
+release key before publishing. Do not substitute a short key ID or an invented
+fingerprint. Windows releases remain available, but Windows installation needs
+a separate PowerShell installer; do not run this Bash installer in PowerShell.

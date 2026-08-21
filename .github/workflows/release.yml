@@ -22,16 +22,19 @@ on:
 
 permissions:
   contents: read
+  id-token: write
 
 jobs:
   release:
     runs-on: ubuntu-latest
+    environment: release
     concurrency:
       group: release-${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
       cancel-in-progress: false
     env:
       AWS_REGION: ${{ vars.AWS_REGION }}
       S3_BUCKET: ${{ vars.S3_BUCKET }}
+      AWS_RELEASE_ROLE_ARN: ${{ vars.AWS_RELEASE_ROLE_ARN }}
       GPG_KEY_ID: ${{ vars.GPG_KEY_ID }}
       RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
       FORCE_RELEASE: ${{ github.event_name == 'workflow_dispatch' && inputs.force || false }}
@@ -47,13 +50,11 @@ jobs:
 
       - name: Validate release configuration
         env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
           GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
         run: |
           set -euo pipefail
-          for name in AWS_REGION S3_BUCKET GPG_KEY_ID AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY GPG_PRIVATE_KEY GPG_PASSPHRASE; do
+          for name in AWS_REGION S3_BUCKET AWS_RELEASE_ROLE_ARN GPG_KEY_ID GPG_PRIVATE_KEY GPG_PASSPHRASE; do
             if [ -z "${!name:-}" ]; then
               echo "::error::Required GitHub secret or variable is not configured: ${name}"
               exit 1
@@ -128,12 +129,14 @@ jobs:
           gpg --batch --verify \
             dist/release-manifest.json.asc \
             dist/release-manifest.json
+          gpg --batch --armor --export "$expected_fingerprint" > dist/owlcode-signing-key.asc
+          test -s dist/owlcode-signing-key.asc
+          printf '%s\n' "${RELEASE_TAG#v}" > dist/version.txt
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v6
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          role-to-assume: ${{ vars.AWS_RELEASE_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
 
       - name: Upload immutable release
@@ -179,3 +182,10 @@ jobs:
           for file in "${files[@]}"; do
             aws s3 cp "$file" "s3://${S3_BUCKET}/${prefix}$(basename "$file")" --only-show-errors
           done
+
+          # These distribution metadata objects are intentionally outside the
+          # immutable version prefix. The installer itself still uses the API
+          # download routes for all release content.
+          aws s3 cp install.sh "s3://${S3_BUCKET}/install.sh" --only-show-errors
+          aws s3 cp dist/owlcode-signing-key.asc "s3://${S3_BUCKET}/owlcode-signing-key.asc" --only-show-errors
+          aws s3 cp dist/version.txt "s3://${S3_BUCKET}/version.txt" --only-show-errors

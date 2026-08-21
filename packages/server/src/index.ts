@@ -6,6 +6,7 @@ import sessions from "./routes/sessions";
 import chat from "./routes/chat";
 import auth from "./routes/auth";
 import billing from "./routes/billing";
+import downloads from "./routes/downloads";
 
 const app = new Hono();
 
@@ -31,6 +32,7 @@ app.use("/billing/portal", requireAuth);
 
 const routes = app
   .route("/auth", auth)
+  .route("/downloads", downloads)
   .route("/billing", billing)
   .route("/sessions", sessions)
   .route("/chat", chat);
