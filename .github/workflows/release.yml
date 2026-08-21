@@ -35,7 +35,9 @@ jobs:
       S3_BUCKET: owlcode-cli-releases-441870953577-ap-south-1-an
       GPG_KEY_ID: ${{ vars.GPG_KEY_ID }}
       RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
-      FORCE_RELEASE: ${{ github.event_name == 'workflow_dispatch' && inputs.force || false }}
+      # Always serialize the boolean dispatch input as the literal strings the
+      # shell guard expects. Tag-push releases can never replace a prefix.
+      FORCE_RELEASE: ${{ github.event_name == 'workflow_dispatch' && inputs.force && 'true' || 'false' }}
       CONFIRM_RELEASE_TAG: ${{ inputs.confirm_release_tag || '' }}
     steps:
       - uses: actions/checkout@v4
@@ -81,6 +83,7 @@ jobs:
             echo "::error::Force release requires confirm_release_tag to exactly match ${RELEASE_TAG}"
             exit 1
           fi
+          echo "Release overwrite mode: ${FORCE_RELEASE}"
 
       - name: Install dependencies for all release targets
         # Prisma loads datasource configuration during client generation, but
@@ -90,7 +93,37 @@ jobs:
         run: bun install --frozen-lockfile --os="*" --cpu="*"
 
       - name: Build and verify standalone executables
-        run: bun run release:build
+        run: |
+          set -euo pipefail
+          bun run release:build
+
+          staging_binary="dist/staging/bun-linux-x64/owlcode"
+          archive="dist/owlcode_${RELEASE_TAG#v}_linux_x64.tar.gz"
+          for forbidden_string in "CLERK_FRONTEND_API not set" "CLERK_SECRET_KEY"; do
+            if strings "$staging_binary" | grep -Fq "$forbidden_string"; then
+              echo "::error::Forbidden string found in Linux staging binary: $forbidden_string"
+              exit 1
+            fi
+          done
+
+          extracted_dir="$(mktemp -d)"
+          trap 'rm -rf -- "$extracted_dir"' EXIT
+          tar -xzf "$archive" -C "$extracted_dir"
+          archive_binary="$extracted_dir/owlcode"
+          if [ ! -x "$archive_binary" ]; then
+            echo "::error::Linux release archive does not contain an executable owlcode binary"
+            exit 1
+          fi
+          if [ "$("$archive_binary" --version)" != "OwlCode v${RELEASE_TAG#v}" ]; then
+            echo "::error::Linux release archive binary version does not match ${RELEASE_TAG}"
+            exit 1
+          fi
+          for forbidden_string in "CLERK_FRONTEND_API not set" "CLERK_SECRET_KEY"; do
+            if strings "$archive_binary" | grep -Fq "$forbidden_string"; then
+              echo "::error::Forbidden string found in Linux release archive: $forbidden_string"
+              exit 1
+            fi
+          done
 
       - name: Generate SHA-256 release manifest
         run: bun run release:manifest
@@ -170,7 +203,7 @@ jobs:
           )
           if [ "${#existing_keys[@]}" -ne 0 ]; then
             if [ "$FORCE_RELEASE" != "true" ]; then
-              echo "::error::Refusing to overwrite existing release s3://${S3_BUCKET}/${prefix}"
+              echo "::error::Refusing to overwrite existing release s3://${S3_BUCKET}/${prefix}. Re-run this workflow manually with force=true and confirm_release_tag=${RELEASE_TAG}."
               exit 1
             fi
 
@@ -219,7 +252,7 @@ jobs:
 
           # These current distribution objects are intentionally outside the
           # immutable version prefix. The installer accesses release content
-          # through the API download routes.
+          # directly from this public S3 bucket.
           aws s3 cp install.sh "s3://${S3_BUCKET}/install.sh" \
             --content-type text/plain --only-show-errors
           aws s3 cp dist/owlcode-signing-key.asc "s3://${S3_BUCKET}/owlcode-signing-key.asc" \
