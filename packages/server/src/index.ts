@@ -7,6 +7,7 @@ import chat from "./routes/chat";
 import auth from "./routes/auth";
 import billing from "./routes/billing";
 import downloads from "./routes/downloads";
+import webhooks from "./routes/webhooks";
 
 const app = new Hono();
 
@@ -45,6 +46,7 @@ app.use("/billing/checkout", requireAuth);
 app.use("/billing/portal", requireAuth);
 
 const routes = app
+  .route("/webhooks", webhooks)
   .route("/auth", auth)
   .route("/downloads", downloads)
   .route("/billing", billing)

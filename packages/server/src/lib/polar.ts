@@ -1,6 +1,9 @@
 import { Polar } from "@polar-sh/sdk";
 
 type PolarServer = "sandbox" | "production";
+const SIGNUP_CREDITS = 100;
+// Must match the immutable filter on the existing Polar meter.
+const POLAR_CREDITS_EVENT_NAME = "owlcode-usage";
 
 function getRequiredEnv(name: string) {
   const value = process.env[name];
@@ -105,6 +108,44 @@ export async function getAvailableCreditsBalance(customerExternalId: string) {
   }
 };
 
+type GrantSignupCreditsParams = {
+  externalCustomerId: string;
+  email: string;
+  name?: string;
+};
+
+/** Grants the one-time $1 (100-credit) signup bonus. Polar deduplicates the
+ * event by externalId, so webhook delivery retries cannot grant it twice. */
+export async function grantSignupCredits({
+  externalCustomerId,
+  email,
+  name,
+}: GrantSignupCreditsParams) {
+  try {
+    await polar.customers.getExternal({ externalId: externalCustomerId });
+  } catch (error) {
+    if (!hasStatusCode(error) || error.statusCode !== 404) throw error;
+
+    await polar.customers.create({
+      email,
+      name: name || undefined,
+      externalId: externalCustomerId,
+    });
+  }
+
+  await polar.events.ingest({
+    events: [
+      {
+        name: POLAR_CREDITS_EVENT_NAME,
+        externalId: `signup-credit:${externalCustomerId}`,
+        externalCustomerId,
+        // A negative sum-meter event represents prepaid available credits.
+        metadata: { credits: -SIGNUP_CREDITS },
+      },
+    ],
+  });
+}
+
 type IngestAiUsageParams = {
   externalCustomerId: string;
   eventId: string;
@@ -123,7 +164,7 @@ export async function ingestAiUsage({
   await polar.events.ingest({
     events: [
       {
-        name: "owlcode_usage",
+        name: POLAR_CREDITS_EVENT_NAME,
         externalId: eventId,
         externalCustomerId,
         metadata: { credits },

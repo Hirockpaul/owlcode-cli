@@ -145,13 +145,17 @@ OwlCode uses **Clerk OAuth** for authentication. To set up:
 ## Billing
 
 OwlCode meters AI usage with **Polar credits**. Each API call consumes credits from the user's account.
+New Clerk users receive a one-time 100-credit ($1) signup bonus through the
+verified `/webhooks/clerk` endpoint. Configure a `user.created` Clerk webhook
+to `https://your-api-domain/webhooks/clerk` and set its signing secret as
+`CLERK_WEBHOOK_SIGNING_SECRET` on the API server.
 
 ### Configure Your Polar Meter
 
 | Setting | Value |
 |---------|-------|
 | Meter Name | `owlcode_credits` |
-| Event Name | `owlcode_usage` |
+| Event Name | `owlcode-usage` |
 | Aggregation | Sum |
 | Metadata Key | `credits` |
 
@@ -196,6 +200,7 @@ docker run -e DATABASE_URL=<url> -e CLERK_SECRET_KEY=<key> ... -p 3000:3000 owlc
 - `CLERK_PUBLISHABLE_KEY`
 - `CLERK_FRONTEND_API` (public; used in the CLI bootstrap document)
 - `CLERK_OAUTH_CLIENT_ID` (public; used in the CLI bootstrap document)
+- `CLERK_WEBHOOK_SIGNING_SECRET`
 - `OWLCODE_PUBLIC_API_URL` (the public HTTPS URL of this API)
 - `GOOGLE_GENERATIVE_AI_API_KEY`
 - `GROQ_API_KEY`

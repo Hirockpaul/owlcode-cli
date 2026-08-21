@@ -10,7 +10,9 @@ export const requireCreditsBalance = createMiddleware<AuthenticatedEnv>(async (c
     // This is a simple launch-time gate: only start new work when the customer
     // still has credits left. It does not reserve the full eventual cost of the
     // request, so low-volume apps may tolerate small overspend on edge cases.
-    if (creditsBalance <= 0) {
+    // Polar represents prepaid credits as a negative sum-meter balance:
+    // -100 means 100 credits remain, while 0 means no credits remain.
+    if (creditsBalance >= 0) {
       return c.json({ error: "No credits remaining. Run /upgrade to buy more credits." }, 402);
     }
 
