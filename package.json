@@ -1,7 +1,9 @@
 {
   "name": "owlCode",
-  "version": "1.0.2",
-  "workspaces": ["packages/*"],
+  "version": "1.0.3",
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
     "dev": "bun run --cwd packages/cli dev",
     "dev:server": "bun --env-file=../../.env run --cwd packages/server dev",
