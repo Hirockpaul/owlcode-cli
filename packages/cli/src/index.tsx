@@ -6,6 +6,8 @@ import { RootLayout } from "./layouts/root-layout";
 import { Home } from "./screen/home";
 import { NewSession } from "./screen/new-session";
 import { Session } from "./screen/session";
+import { initializeConfig } from "./lib/env";
+import { refreshApiClient } from "./lib/api-client";
 
 const router = createMemoryRouter([
   {
@@ -26,6 +28,8 @@ function App() {
 if (process.argv.includes("--version")) {
   console.log(`OwlCode v${packageMetadata.version}`);
 } else {
+  await initializeConfig();
+  refreshApiClient();
   const renderer = await createCliRenderer({
     targetFps: 60,
     exitOnCtrlC: false,

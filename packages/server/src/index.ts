@@ -14,6 +14,20 @@ app.get("/health", (c) =>
   c.json({ status: "ok", service: "owlcode-api" })
 );
 
+// Public bootstrap document for installed CLIs. Do not add server secrets here.
+app.get("/.well-known/owlcode.json", (c) => {
+  const apiUrl = process.env.OWLCODE_PUBLIC_API_URL;
+  const frontendApi = process.env.CLERK_FRONTEND_API;
+  const oauthClientId = process.env.CLERK_OAUTH_CLIENT_ID;
+
+  if (!apiUrl || !frontendApi || !oauthClientId) {
+    return c.json({ error: "Public CLI configuration is not configured" }, 503);
+  }
+
+  c.header("Cache-Control", "public, max-age=300");
+  return c.json({ apiUrl, clerk: { frontendApi, oauthClientId } });
+});
+
 app.onError((error, c) => {
   if (error instanceof HTTPException) {
     return c.json({ 

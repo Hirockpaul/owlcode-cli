@@ -34,6 +34,9 @@ jobs:
       AWS_REGION: ap-south-1
       S3_BUCKET: owlcode-cli-releases-441870953577-ap-south-1-an
       GPG_KEY_ID: ${{ vars.GPG_KEY_ID }}
+      OWLCODE_PUBLIC_API_URL: ${{ vars.OWLCODE_PUBLIC_API_URL }}
+      CLERK_FRONTEND_API: ${{ vars.CLERK_FRONTEND_API }}
+      CLERK_OAUTH_CLIENT_ID: ${{ vars.CLERK_OAUTH_CLIENT_ID }}
       RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
       # Always serialize the boolean dispatch input as the literal strings the
       # shell guard expects. Tag-push releases can never replace a prefix.
@@ -56,7 +59,7 @@ jobs:
           GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
         run: |
           set -euo pipefail
-          for name in AWS_REGION S3_BUCKET AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY GPG_KEY_ID GPG_PRIVATE_KEY GPG_PASSPHRASE; do
+          for name in AWS_REGION S3_BUCKET AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY GPG_KEY_ID GPG_PRIVATE_KEY GPG_PASSPHRASE OWLCODE_PUBLIC_API_URL CLERK_FRONTEND_API CLERK_OAUTH_CLIENT_ID; do
             if [ -z "${!name:-}" ]; then
               echo "::error::Required GitHub secret or variable is not configured: ${name}"
               exit 1
@@ -124,6 +127,25 @@ jobs:
               exit 1
             fi
           done
+
+      - name: Build public CLI bootstrap configuration
+        run: |
+          set -euo pipefail
+          case "$OWLCODE_PUBLIC_API_URL" in https://*) ;; *) echo "::error::OWLCODE_PUBLIC_API_URL must be an HTTPS URL"; exit 1 ;; esac
+          case "$CLERK_FRONTEND_API" in https://*) ;; *) echo "::error::CLERK_FRONTEND_API must be an HTTPS URL"; exit 1 ;; esac
+          python3 - <<'PY'
+          import json, os
+          config = {
+              "apiUrl": os.environ["OWLCODE_PUBLIC_API_URL"].rstrip("/"),
+              "clerk": {
+                  "frontendApi": os.environ["CLERK_FRONTEND_API"].rstrip("/"),
+                  "oauthClientId": os.environ["CLERK_OAUTH_CLIENT_ID"],
+              },
+          }
+          with open("dist/owlcode-config.json", "w", encoding="utf-8") as output:
+              json.dump(config, output, separators=(",", ":"))
+              output.write("\n")
+          PY
 
       - name: Generate SHA-256 release manifest
         run: bun run release:manifest
@@ -242,6 +264,7 @@ jobs:
             install.sh
             dist/owlcode-signing-key.asc
             dist/version.txt
+            dist/owlcode-config.json
           )
           for file in "${files[@]}"; do
             if [ ! -s "$file" ]; then
@@ -259,3 +282,5 @@ jobs:
             --content-type application/pgp-keys --only-show-errors
           aws s3 cp dist/version.txt "s3://${S3_BUCKET}/version.txt" \
             --content-type text/plain --only-show-errors
+          aws s3 cp dist/owlcode-config.json "s3://${S3_BUCKET}/owlcode-config.json" \
+            --content-type application/json --cache-control 'public, max-age=300' --only-show-errors

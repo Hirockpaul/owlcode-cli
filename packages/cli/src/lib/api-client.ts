@@ -3,8 +3,9 @@ import type { AppType } from "@owlcode/server";
 import { clearAuth, getAuth } from "./auth";
 import { getApiUrl } from "./env";
 
-export const apiClient = hc<AppType>(
-  getApiUrl(),
+function createApiClient() {
+  return hc<AppType>(
+    getApiUrl(),
   {
     fetch: async (
       input: Parameters<typeof fetch>[0],
@@ -24,5 +25,14 @@ export const apiClient = hc<AppType>(
 
       return response;
     }
-  }
-);
+    },
+  );
+}
+
+// This binding is refreshed after first-run public configuration is loaded.
+// ESM imports remain live bindings, so UI code uses the production API URL.
+export let apiClient = createApiClient();
+
+export function refreshApiClient() {
+  apiClient = createApiClient();
+}

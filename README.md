@@ -68,13 +68,19 @@ The CLI file contains only public client configuration, including
 Polar, and server runtime configuration. Never place server secrets in the CLI
 environment.
 
-Installed CLI releases include the public Clerk OAuth configuration needed for
-sign-in. To use a different public Clerk application, set
-`CLERK_FRONTEND_API` and `CLERK_OAUTH_CLIENT_ID`, or create
-`~/.owlcode/config.json`:
+On first start, an installed CLI fetches public production settings from the
+release bucket and caches them in `~/.owlcode/config.json`. This includes the
+API URL and Clerk OAuth client settings; users do not need a local `.env`.
+The access token created by `/login` is stored separately in
+`~/.owlcode/auth.json` with owner-only permissions.
+
+For development, self-hosting, or an override, set `OWLCODE_API_URL`,
+`CLERK_FRONTEND_API`, `CLERK_OAUTH_CLIENT_ID`, and optionally
+`OWLCODE_CONFIG_URL`; or create `~/.owlcode/config.json`:
 
 ```json
 {
+  "apiUrl": "https://api.yourdomain.com",
   "clerk": {
     "frontendApi": "https://your-instance.clerk.accounts.dev",
     "oauthClientId": "your-public-oauth-client-id"
@@ -84,6 +90,11 @@ sign-in. To use a different public Clerk application, set
 
 Never add `CLERK_SECRET_KEY` to this file or any CLI configuration. It belongs
 only on the OwlCode server.
+
+Before publishing a release, set these public GitHub Actions variables:
+`OWLCODE_PUBLIC_API_URL`, `CLERK_FRONTEND_API`, and
+`CLERK_OAUTH_CLIENT_ID`. Set the same values as environment variables on the
+API deployment to serve `/.well-known/owlcode.json` for self-hosted clients.
 
 ## Development
 
@@ -182,6 +193,10 @@ docker run -e DATABASE_URL=<url> -e CLERK_SECRET_KEY=<key> ... -p 3000:3000 owlc
 **Required environment variables at runtime:**
 - `DATABASE_URL`
 - `CLERK_SECRET_KEY`
+- `CLERK_PUBLISHABLE_KEY`
+- `CLERK_FRONTEND_API` (public; used in the CLI bootstrap document)
+- `CLERK_OAUTH_CLIENT_ID` (public; used in the CLI bootstrap document)
+- `OWLCODE_PUBLIC_API_URL` (the public HTTPS URL of this API)
 - `GOOGLE_GENERATIVE_AI_API_KEY`
 - `GROQ_API_KEY`
 - `POLAR_ACCESS_TOKEN`
@@ -198,5 +213,3 @@ docker run -e DATABASE_URL=<url> -e CLERK_SECRET_KEY=<key> ... -p 3000:3000 owlc
 - **Auth**: Clerk
 - **Billing**: Polar
 - **Monitoring**: Sentry
-
-
