@@ -40,17 +40,17 @@ three root objects. Those root objects are the current distribution files:
 the source-controlled installer, the public signing key, and the unprefixed
 release version (for example, `1.0.2`, never `v1.0.2`).
 
-GitHub Actions authenticates with OIDC, not long-lived AWS keys. Configure the
-release-role ARN in the `AWS_RELEASE_ROLE_ARN` repository variable (account
-`441870953577`). Its trust policy must restrict the GitHub OIDC subject to
-`repo:Hirockpaul/owlcode-cli` and the `release` environment. The workflow
-needs `id-token: write` and `contents: read` permissions.
+GitHub Actions authenticates with the `AWS_ACCESS_KEY_ID` and
+`AWS_SECRET_ACCESS_KEY` repository secrets for account `441870953577`. The
+workflow uses `ap-south-1` and requires only `contents: read`; do not expose
+these secrets in logs, the installer, or committed files.
 
-The role policy should be limited to `s3:ListBucket`, `s3:GetObject`, and
+The IAM identity associated with those secrets should be limited to
+`s3:ListBucket`, `s3:GetObject`, and
 `s3:PutObject` for the bucket/release prefix. `s3:DeleteObject` is permitted
 only for the explicit force-release path. Do not grant `s3:*` or `Resource: *`.
 
-The release role also needs `s3:PutObject` for the three root distribution
+That IAM identity also needs `s3:PutObject` for the three root distribution
 objects (`install.sh`, `owlcode-signing-key.asc`, and `version.txt`). The
 server runtime role needs only `s3:GetObject` for those objects and
 `releases/*` in order to presign downloads.

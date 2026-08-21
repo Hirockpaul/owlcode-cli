@@ -22,7 +22,6 @@ on:
 
 permissions:
   contents: read
-  id-token: write
 
 jobs:
   release:
@@ -32,9 +31,8 @@ jobs:
       group: release-${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
       cancel-in-progress: false
     env:
-      AWS_REGION: ${{ vars.AWS_REGION }}
-      S3_BUCKET: ${{ vars.S3_BUCKET }}
-      AWS_RELEASE_ROLE_ARN: ${{ vars.AWS_RELEASE_ROLE_ARN }}
+      AWS_REGION: ap-south-1
+      S3_BUCKET: owlcode-cli-releases-441870953577-ap-south-1-an
       GPG_KEY_ID: ${{ vars.GPG_KEY_ID }}
       RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
       FORCE_RELEASE: ${{ github.event_name == 'workflow_dispatch' && inputs.force || false }}
@@ -50,11 +48,13 @@ jobs:
 
       - name: Validate release configuration
         env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
           GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
         run: |
           set -euo pipefail
-          for name in AWS_REGION S3_BUCKET AWS_RELEASE_ROLE_ARN GPG_KEY_ID GPG_PRIVATE_KEY GPG_PASSPHRASE; do
+          for name in AWS_REGION S3_BUCKET AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY GPG_KEY_ID GPG_PRIVATE_KEY GPG_PASSPHRASE; do
             if [ -z "${!name:-}" ]; then
               echo "::error::Required GitHub secret or variable is not configured: ${name}"
               exit 1
@@ -134,10 +134,11 @@ jobs:
           printf '%s\n' "${RELEASE_TAG#v}" > dist/version.txt
 
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v6
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ vars.AWS_RELEASE_ROLE_ARN }}
-          aws-region: ${{ vars.AWS_REGION }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-south-1
 
       - name: Upload immutable release
         run: |
