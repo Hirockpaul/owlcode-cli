@@ -1,6 +1,6 @@
 import open from "open";
 import { saveAuth } from "./auth";
-import { getApiUrl } from "./env";
+import { getApiUrl, getClerkConfig } from "./env";
 
 const LOGIN_TIMEOUT_MS = 5 * 60 * 1000;
 
@@ -35,11 +35,7 @@ function getErrorMessage(error: unknown) {
 }
 
 export async function performLogin() {
-  const clerkFrontendApi = process.env.CLERK_FRONTEND_API;
-  const clientId = process.env.CLERK_OAUTH_CLIENT_ID;
-
-  if (!clerkFrontendApi) throw new Error("CLERK_FRONTEND_API not set");
-  if (!clientId) throw new Error("CLERK_OAUTH_CLIENT_ID not set");
+  const { frontendApi: clerkFrontendApi, oauthClientId: clientId } = getClerkConfig();
 
   const nonce = crypto.randomUUID();
   const codeVerifier = toBase64Url(crypto.getRandomValues(new Uint8Array(32)));

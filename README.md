@@ -68,6 +68,23 @@ The CLI file contains only public client configuration, including
 Polar, and server runtime configuration. Never place server secrets in the CLI
 environment.
 
+Installed CLI releases include the public Clerk OAuth configuration needed for
+sign-in. To use a different public Clerk application, set
+`CLERK_FRONTEND_API` and `CLERK_OAUTH_CLIENT_ID`, or create
+`~/.owlcode/config.json`:
+
+```json
+{
+  "clerk": {
+    "frontendApi": "https://your-instance.clerk.accounts.dev",
+    "oauthClientId": "your-public-oauth-client-id"
+  }
+}
+```
+
+Never add `CLERK_SECRET_KEY` to this file or any CLI configuration. It belongs
+only on the OwlCode server.
+
 ## Development
 
 ### Start the API Server
@@ -181,6 +198,5 @@ docker run -e DATABASE_URL=<url> -e CLERK_SECRET_KEY=<key> ... -p 3000:3000 owlc
 - **Auth**: Clerk
 - **Billing**: Polar
 - **Monitoring**: Sentry
-
 
 
