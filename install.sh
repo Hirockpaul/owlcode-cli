@@ -9,19 +9,21 @@ need curl
 need gpg
 need python3
 
-version="${1:-${OWLCODE_VERSION:-}}"
-[[ -n "$version" ]] || die "provide a version (for example: ./install.sh 1.0.2)"
-version="${version#v}"
-[[ "$version" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-([0-9A-Za-z-]+)(\.[0-9A-Za-z-]+)*)?$ ]] || die "invalid release version: $version"
-
-# This must be the deployed OwlCode API, not a direct S3 URL.
-DOWNLOAD_BASE="${DOWNLOAD_BASE:-${OWLCODE_RELEASE_BASE_URL:-}}"
-[[ -n "$DOWNLOAD_BASE" ]] || die "set DOWNLOAD_BASE to the OwlCode API downloads URL"
+# Environment overrides are available for release testing, but public S3 is the
+# normal distribution endpoint.
+DOWNLOAD_BASE="${DOWNLOAD_BASE:-${OWLCODE_RELEASE_BASE_URL:-https://owlcode-cli-releases-441870953577-ap-south-1-an.s3.ap-south-1.amazonaws.com}}"
 DOWNLOAD_BASE="${DOWNLOAD_BASE%/}"
 
-key_fingerprint="${OWLCODE_GPG_KEY_FINGERPRINT:-${GPG_KEY_ID:-}}"
-[[ "$key_fingerprint" =~ ^[0-9A-Fa-f]{40}$ ]] || die "set OWLCODE_GPG_KEY_FINGERPRINT to the trusted 40-character signing-key fingerprint"
+key_fingerprint="${OWLCODE_GPG_KEY_FINGERPRINT:-1833A297413FE85ED9962B5BCF5D81AA2CF696BB}"
+[[ "$key_fingerprint" =~ ^[0-9A-Fa-f]{40}$ ]] || die "OWLCODE_GPG_KEY_FINGERPRINT must be a trusted 40-character signing-key fingerprint"
 key_fingerprint="${key_fingerprint^^}"
+
+version="${1:-${OWLCODE_VERSION:-}}"
+if [[ -z "$version" ]]; then
+  version="$(curl --fail --silent --show-error --location "$DOWNLOAD_BASE/version.txt")"
+fi
+version="${version#v}"
+[[ "$version" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-([0-9A-Za-z-]+)(\.[0-9A-Za-z-]+)*)?$ ]] || die "invalid release version: $version"
 
 case "$(uname -s)" in
   Linux) os="linux" ;;
