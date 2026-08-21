@@ -35,7 +35,10 @@ generates and signs the manifest, then publishes to `releases/v<VERSION>/`.
 Normal releases are immutable: if any object exists in that prefix, publishing
 fails. A manual workflow dispatch may replace only that prefix after both
 `force: true` and exact `confirm_release_tag` confirmation. Do not remove this
-guard.
+guard. Only after the immutable upload is verified does the workflow update the
+three root objects. Those root objects are the current distribution files:
+the source-controlled installer, the public signing key, and the unprefixed
+release version (for example, `1.0.2`, never `v1.0.2`).
 
 GitHub Actions authenticates with OIDC, not long-lived AWS keys. Configure the
 release-role ARN in the `AWS_RELEASE_ROLE_ARN` repository variable (account
