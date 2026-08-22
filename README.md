@@ -1,5 +1,9 @@
 # OwlCode
 
+## [Install OwlCode](https://owlcode-installation.vercel.app/)
+
+Visit the installation website for setup instructions and downloads.
+
 A powerful terminal-based AI coding assistant with support for multiple AI models and two distinct working modes: **Plan** (read-only analysis) and **Build** (full implementation with file editing and shell execution).
 
 ## Features
