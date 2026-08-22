@@ -78,6 +78,7 @@ export const COMMANDS: Command[] = [
 
       try {
         await performLogin();
+        ctx.onLogin?.();
         ctx.toast.show({ variant: "success", message: "Signed in" });
       } catch (error) {
         const message = error instanceof Error 

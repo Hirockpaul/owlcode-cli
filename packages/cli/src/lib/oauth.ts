@@ -9,6 +9,12 @@ type OAuthState = {
   port: number;
 };
 
+type IdentityClaims = {
+  name?: unknown;
+  given_name?: unknown;
+  email?: unknown;
+};
+
 function toBase64Url(input: Uint8Array | string) {
   return Buffer.from(input).toString("base64url");
 }
@@ -32,6 +38,22 @@ function decodeState(state: string) {
 
 function getErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : String(error);
+}
+
+function readIdentityClaims(token: string | undefined): IdentityClaims | null {
+  if (!token) return null;
+
+  try {
+    const payload = token.split(".")[1];
+    if (!payload) return null;
+    return JSON.parse(Buffer.from(payload, "base64url").toString()) as IdentityClaims;
+  } catch {
+    return null;
+  }
+}
+
+function textClaim(value: unknown) {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
 export async function performLogin() {
@@ -114,11 +136,27 @@ export async function performLogin() {
             throw new Error(details || "Failed to exchange authorization code");
           }
 
-          const tokenData = (await tokenRes.json()) as { access_token: string };
+          const tokenData = (await tokenRes.json()) as {
+            access_token: string;
+            id_token?: string;
+          };
+          const claims = readIdentityClaims(tokenData.id_token);
 
           settled = true;
           clearTimeout(loginTimeout);
-          saveAuth({ token: tokenData.access_token });
+          saveAuth({
+            token: tokenData.access_token,
+            ...(claims
+              ? {
+                  user: {
+                    ...(textClaim(claims.name) ?? textClaim(claims.given_name)
+                      ? { name: textClaim(claims.name) ?? textClaim(claims.given_name) }
+                      : {}),
+                    ...(textClaim(claims.email) ? { email: textClaim(claims.email) } : {}),
+                  },
+                }
+              : {}),
+          });
           resolve({ token: tokenData.access_token });
           setTimeout(() => server.stop(), 500);
           return new Response("Authenticated! You can close this tab.");

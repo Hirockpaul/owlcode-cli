@@ -262,6 +262,7 @@ function FileMentionMenu({
 type Props = {
   onSubmit: (text: string) => void;
   disabled?: boolean;
+  onLogin?: () => void;
 };
 
 export const TEXTAREA_KEY_BINDINGS: KeyBinding[] = [
@@ -271,7 +272,7 @@ export const TEXTAREA_KEY_BINDINGS: KeyBinding[] = [
   { name: "enter", shift: true, action: "newline" },
 ];
 
-export function InputBar({ onSubmit, disabled = false }: Props) {
+export function InputBar({ onSubmit, disabled = false, onLogin }: Props) {
   const { mode, toggleMode, setMode, setModel } = usePromptConfig();
   const textareaRef = useRef<TextareaRenderable>(null);
   const onSubmitRef = useRef<() => void>(() => {});
@@ -401,11 +402,12 @@ export function InputBar({ onSubmit, disabled = false }: Props) {
         mode,
         setMode,
         setModel,
+        onLogin,
       });
     } else {
       textarea.insertText(command.value + " ");
     }
-  }, [renderer, toast, dialog, navigate, mode, setMode, setModel]);
+  }, [renderer, toast, dialog, navigate, mode, setMode, setModel, onLogin]);
 
   const handleCommandExecute = useCallback(
     (index: number) => {
