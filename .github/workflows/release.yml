@@ -93,7 +93,9 @@ jobs:
         # `prisma generate` does not connect to this build-only database URL.
         env:
           DATABASE_URL: postgresql://build:build@localhost:5432/build
-        run: bun install --frozen-lockfile --os="*" --cpu="*"
+        run: |
+          bun install --frozen-lockfile --os="*" --cpu="*"
+          bun run --cwd packages/database db:generate
 
       - name: Build and verify standalone executables
         run: |
