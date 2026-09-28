@@ -3,12 +3,12 @@
   "module": "src/index.tsx",
   "type": "module",
   "private": true,
-  "bin" : {
-        "owlcode": "./bin/owlcode"
+  "bin": {
+    "owlcode": "./bin/owlcode"
   },
   "scripts": {
     "dev": "bun run --watch src/index.tsx",
-    "build" : "bun build src/index.tsx --outdir dist --target bun --external '@opentui/core-*'",
+    "build": "bun build src/index.tsx --outdir dist --target bun --external '@opentui/core-*'",
     "build:release": "bun build src/index.tsx --compile --no-compile-autoload-dotenv --outfile dist/owlcode"
   },
   "devDependencies": {
@@ -33,6 +33,7 @@
     "pretty-ms": "^9.3.0",
     "react": "^19.2.6",
     "react-router": "^8.0.1",
+    "tree-sitter-wasms": "0.1.13",
     "zod": "^4.4.3"
   }
 }

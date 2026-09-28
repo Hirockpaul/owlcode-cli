@@ -120,6 +120,32 @@ export function BotMessage({
     "markup.link.url": { fg: colors.dimSeparator, underline: true },
     "markup.list": { fg: colors.primary },
     "markup.quote": { fg: "#A0A0A0", italic: true },
+    // Classic Monokai syntax colors for fenced code blocks. OpenTUI resolves
+    // Tree-sitter capture names from the most specific entry to the base name.
+    comment: { fg: "#75715E", italic: true },
+    keyword: { fg: "#F92672" },
+    "keyword.function": { fg: "#F92672" },
+    "keyword.operator": { fg: "#F92672" },
+    "keyword.return": { fg: "#F92672" },
+    string: { fg: "#E6DB74" },
+    "string.escape": { fg: "#AE81FF" },
+    number: { fg: "#AE81FF" },
+    boolean: { fg: "#AE81FF" },
+    constant: { fg: "#AE81FF" },
+    function: { fg: "#A6E22E" },
+    "function.call": { fg: "#A6E22E" },
+    "function.method": { fg: "#A6E22E" },
+    constructor: { fg: "#A6E22E" },
+    type: { fg: "#66D9EF", italic: true },
+    "type.builtin": { fg: "#66D9EF", italic: true },
+    variable: { fg: "#F8F8F2" },
+    "variable.builtin": { fg: "#66D9EF", italic: true },
+    "variable.parameter": { fg: "#FD971F", italic: true },
+    property: { fg: "#A6E22E" },
+    operator: { fg: "#F92672" },
+    tag: { fg: "#F92672" },
+    attribute: { fg: "#A6E22E" },
+    punctuation: { fg: "#F8F8F2" },
   }), [colors]);
   const copyText = useMemo(() => {
     return parts

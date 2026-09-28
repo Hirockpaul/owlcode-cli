@@ -9,6 +9,9 @@ import { Session } from "./screen/session";
 import { initializeConfig } from "./lib/env";
 import { refreshApiClient } from "./lib/api-client";
 import { updateOwlCode } from "./lib/update";
+import { registerSyntaxHighlighters } from "./lib/syntax-highlighting";
+
+registerSyntaxHighlighters();
 
 const router = createMemoryRouter([
   {
