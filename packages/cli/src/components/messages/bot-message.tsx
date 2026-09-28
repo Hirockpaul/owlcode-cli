@@ -1,10 +1,10 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import prettyMs from "pretty-ms";
 import { EmptyBorder } from "../border";
 import { useTheme } from "../../providers/theme";
 import type { Message } from "../../hooks/use-chat";
 import { Mode, type ModeType } from "@owlcode/shared";
-import { TextAttributes } from "@opentui/core";
+import { SyntaxStyle, TextAttributes } from "@opentui/core";
 import { copyToClipboard } from "../../lib/clipboard";
 import { useToast } from "../../providers/toast";
 
@@ -107,12 +107,30 @@ export function BotMessage({
   const { colors } = useTheme();
   const toast = useToast();
   const [copied, setCopied] = useState(false);
+  const markdownStyle = useMemo(() => SyntaxStyle.fromStyles({
+    default: { fg: "#E7E7E7" },
+    conceal: { fg: colors.dimSeparator, dim: true },
+    "markup.heading": { fg: colors.primary, bold: true },
+    "markup.strong": { fg: "#E7E7E7", bold: true },
+    "markup.italic": { fg: "#A0A0A0", italic: true },
+    "markup.strikethrough": { fg: "#666666", dim: true },
+    "markup.raw": { fg: colors.primary },
+    "markup.link": { fg: colors.primary },
+    "markup.link.label": { fg: colors.primary },
+    "markup.link.url": { fg: colors.dimSeparator, underline: true },
+    "markup.list": { fg: colors.primary },
+    "markup.quote": { fg: "#A0A0A0", italic: true },
+  }), [colors]);
   const copyText = useMemo(() => {
     return parts
       .filter(isTextPart)
       .map((part) => part.text)
       .join("");
   }, [parts]);
+
+  useEffect(() => {
+    return () => markdownStyle.destroy();
+  }, [markdownStyle]);
 
   const handleCopy = async () => {
     if (!copyText.trim()) return;
@@ -131,9 +149,23 @@ export function BotMessage({
   };
 
   return (
-    <box width="100%" alignItems="center">
+    <box width="100%" paddingX={2} paddingBottom={2}>
+      <box flexDirection="row" gap={1} paddingBottom={1}>
+        <text fg={mode === Mode.PLAN ? colors.planMode : colors.primary}>●</text>
+        <text fg={colors.primary}>OwlCode</text>
+        <text attributes={TextAttributes.DIM} fg={colors.dimSeparator}>·</text>
+        <text attributes={TextAttributes.DIM}>{mode === Mode.PLAN ? "Plan" : "Build"}</text>
+        <text attributes={TextAttributes.DIM} fg={colors.dimSeparator}>·</text>
+        <text attributes={TextAttributes.DIM}>{model}</text>
+        {(durationMs != null) && (
+          <>
+            <text attributes={TextAttributes.DIM} fg={colors.dimSeparator}>·</text>
+            <text attributes={TextAttributes.DIM}>{prettyMs(durationMs)}</text>
+          </>
+        )}
+      </box>
       {groupConsecutiveParts(parts).map((group, i) => (
-        <box key={group.key} width="100%" paddingTop={i === 0 ? 0 : 1}>
+        <box key={group.key} width="100%" paddingTop={i === 0 ? 0 : 1} paddingLeft={2}>
           {group.parts.map((part, j) => {
             if (part.type === "reasoning") {
               return (
@@ -146,10 +178,10 @@ export function BotMessage({
                     vertical: "│",
                   }}
                   width="100%"
-                  paddingX={2}
+                  paddingLeft={1}
                 >
                   <text attributes={TextAttributes.DIM}>
-                    <em fg={colors.thinking}>Thinking:</em> {part.text}
+                    <em fg={colors.thinking}>▸ Thinking ·</em> {part.text}
                   </text>
                 </box>
               );
@@ -169,7 +201,7 @@ export function BotMessage({
                     vertical: "│",
                   }}
                   width="100%"
-                  paddingX={2}
+                  paddingLeft={1}
                 >
                   <text attributes={TextAttributes.DIM}>
                     <em fg={colors.info}>{formatToolName(toolName)}:</em> {formatToolArgs(part)}
@@ -202,8 +234,14 @@ export function BotMessage({
 
             if (part.type === "text") {
               return (
-                <box key={`text-${j}`} paddingX={3} width="100%">
-                  <text>{part.text}</text>
+                <box key={`text-${j}`} width="100%">
+                  <markdown
+                    content={part.text}
+                    syntaxStyle={markdownStyle}
+                    conceal
+                    streaming={streaming}
+                    width="100%"
+                  />
                 </box>
               );
             }
@@ -214,15 +252,11 @@ export function BotMessage({
       ))}
 
       {((copyText.trim().length > 0) || canRegenerate) && !streaming && (
-        <box paddingX={3} paddingTop={1} width="100%" flexDirection="row" gap={2}>
+        <box paddingLeft={2} paddingTop={1} width="100%" flexDirection="row" gap={2}>
           {copyText.trim().length > 0 && (
             <box
               flexDirection="row"
               flexShrink={0}
-              paddingX={1}
-              border={["left", "right"]}
-              borderColor={copied ? colors.success : colors.info}
-              customBorderChars={EmptyBorder}
               onMouseDown={() => {
                 void handleCopy();
               }}
@@ -230,9 +264,9 @@ export function BotMessage({
               <text
                 selectable={false}
                 fg={copied ? colors.success : colors.info}
-                attributes={TextAttributes.BOLD}
+                attributes={TextAttributes.DIM}
               >
-                {copied ? "✓ Response copied" : "Copy response"}
+                {copied ? "✓ Copied" : "Copy"}
               </text>
             </box>
           )}
@@ -240,10 +274,6 @@ export function BotMessage({
             <box
               flexDirection="row"
               flexShrink={0}
-              paddingX={1}
-              border={["left", "right"]}
-              borderColor={colors.info}
-              customBorderChars={EmptyBorder}
               onMouseDown={() => {
                 onRegenerate();
               }}
@@ -251,39 +281,15 @@ export function BotMessage({
               <text
                 selectable={false}
                 fg={colors.info}
-                attributes={TextAttributes.BOLD}
+                attributes={TextAttributes.DIM}
               >
-                Regenerate response
+                Regenerate
               </text>
             </box>
           )}
         </box>
       )}
 
-      <box paddingX={3} paddingY={1} gap={1} width="100%">
-        <box flexDirection="row" gap={2}>
-          <text fg={mode === Mode.PLAN ? colors.planMode : colors.primary}>◉</text>
-          <box flexDirection="row" gap={1}>
-            <text>
-              {mode === Mode.PLAN ? "Plan" : "Build"}
-            </text>
-            <text attributes={TextAttributes.DIM} fg={colors.dimSeparator}>
-              ›
-            </text>
-            <text attributes={TextAttributes.DIM}>{model}</text>
-            {(durationMs != null) && (
-              <>
-                <text attributes={TextAttributes.DIM} fg={colors.dimSeparator}>
-                  ›
-                </text>
-                <text attributes={TextAttributes.DIM}>
-                  {prettyMs(durationMs)}
-                </text>
-              </>
-            )}
-          </box>
-        </box>
-      </box>
     </box>
   );
 };

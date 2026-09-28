@@ -20,6 +20,23 @@ export type Theme = {
 
 export const THEMES: Theme[] = [
   {
+    name: "VOID",
+    colors: {
+      primary: "#B56CFF",
+      planMode: "#B56CFF",
+      selection: "#C084FC",
+      thinking: "#A0A0A0",
+      success: "#8BCF9B",
+      error: "#E57373",
+      info: "#B56CFF",
+      background: "#090909",
+      surface: "#141414",
+      dialogSurface: "#141414",
+      thinkingBorder: "#252525",
+      dimSeparator: "#666666",
+    },
+  },
+  {
     name: "Nightfox",
     colors: {
       primary: "#56D6C2",
@@ -565,4 +582,4 @@ export const THEMES: Theme[] = [
   },
 ];
 
-export const DEFAULT_THEME = THEMES.find((t) => t.name === "Nightfox")!;
+export const DEFAULT_THEME = THEMES.find((t) => t.name === "VOID")!;

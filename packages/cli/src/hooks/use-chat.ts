@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { createElement, useCallback, useRef, useState } from "react";
 import {
   type ChatStreamEvent,
   type ModeType,
@@ -6,6 +6,11 @@ import {
 } from "@owlcode/shared";
 import { apiClient } from "../lib/api-client";
 import { getAuth } from "../lib/auth";
+import { executeLocalTool } from "../lib/local-tools";
+import { requestLocalPermission, type LocalPermissionRequest } from "../lib/local-permissions";
+import { PermissionDialogContent } from "../components/dialogs";
+import { useDialog } from "../providers/dialog";
+import { getErrorMessage } from "../lib/http-errors";
 
 export type ChatMessageMetadata = {
   mode?: ModeType;
@@ -66,6 +71,7 @@ function parseSseEvents(chunk: string) {
 }
 
 export function useChat(sessionId: string, initialMessages: Message[]) {
+  const { open: openDialog, close: closeDialog } = useDialog();
   const [messages, setMessages] = useState(initialMessages);
   const [status, setStatus] = useState<ChatStatus>("ready");
   const [error, setError] = useState<Error | null>(null);
@@ -85,19 +91,21 @@ export function useChat(sessionId: string, initialMessages: Message[]) {
   const abort = useCallback(() => {
     abortRef.current?.abort();
     abortRef.current = null;
+    closeDialog();
     setStatus("ready");
-  }, []);
+  }, [closeDialog]);
 
   const consumeAssistantStream = useCallback(
     async (params: {
       response: Response;
       assistantId: string;
       abortController: AbortController;
+      mode: ModeType;
     }) => {
-      const { response, assistantId, abortController } = params;
+      const { response, assistantId, abortController, mode } = params;
 
       if (!response.ok) {
-        throw new Error(await response.text());
+        throw new Error(await getErrorMessage(response));
       }
 
       setStatus("streaming");
@@ -107,6 +115,44 @@ export function useChat(sessionId: string, initialMessages: Message[]) {
 
       const decoder = new TextDecoder();
       let buffer = "";
+      let toolExecutionError: Error | null = null;
+      const toolTasks: Promise<void>[] = [];
+
+      const executeToolCall = async (event: Extract<ChatStreamEvent, {type: "tool-call"}>) => {
+        let result: unknown;
+        try {
+          result = await executeLocalTool(event.toolName, event.args, mode, (request) =>
+            requestLocalPermission(request, (permissionRequest: LocalPermissionRequest) =>
+              new Promise<boolean>((resolve) => {
+                openDialog({
+                  title: "Local access required",
+                  children: createElement(PermissionDialogContent, {
+                    request: permissionRequest,
+                    resolve,
+                  }),
+                });
+              }),
+            ),
+          );
+        } catch (error) {
+          result = {
+            error: error instanceof Error ? error.message : String(error),
+          };
+        }
+
+        const toolResponse = await apiClient.chat[":sessionId"]["tool-results"].$post({
+          param: { sessionId },
+          json: {
+            runId: event.runId,
+            toolCallId: event.toolCallId,
+            result,
+          },
+        });
+
+        if (!toolResponse.ok) {
+          throw new Error(await toolResponse.text());
+        }
+      };
 
       while (true) {
         const { value, done } = await reader.read();
@@ -147,6 +193,14 @@ export function useChat(sessionId: string, initialMessages: Message[]) {
                 },
               ],
             }));
+
+            const task = executeToolCall(event).catch(async (executionError) => {
+              toolExecutionError = executionError instanceof Error
+                ? executionError
+                : new Error(String(executionError));
+              await reader.cancel();
+            });
+            toolTasks.push(task);
           }
 
           if (event.type === "tool-result") {
@@ -179,11 +233,14 @@ export function useChat(sessionId: string, initialMessages: Message[]) {
         }
       }
 
+      await Promise.all(toolTasks);
+      if (toolExecutionError) throw toolExecutionError;
+
       if (!abortController.signal.aborted) {
         setStatus("ready");
       }
     },
-    [updateAssistantMessage],
+    [openDialog, updateAssistantMessage],
   );
 
   const submit = useCallback(
@@ -223,6 +280,7 @@ export function useChat(sessionId: string, initialMessages: Message[]) {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
+              "X-OwlCode-Local-Tools": "1",
               ...(auth ? { Authorization: `Bearer ${auth.token}` } : {}),
             },
             body: JSON.stringify({
@@ -234,7 +292,12 @@ export function useChat(sessionId: string, initialMessages: Message[]) {
           },
         );
 
-        await consumeAssistantStream({ response, assistantId, abortController });
+        await consumeAssistantStream({
+          response,
+          assistantId,
+          abortController,
+          mode: params.mode,
+        });
       } catch (err) {
         if (abortController.signal.aborted) return;
 
@@ -268,6 +331,17 @@ export function useChat(sessionId: string, initialMessages: Message[]) {
     }
 
     const userMessage = messages[latestUserIndex]!;
+    const regenerationMode = userMessage.metadata?.mode;
+    const regenerationModel = userMessage.metadata?.model;
+    const regenerationText = userMessage.parts
+      .filter((part): part is TextPart => part.type === "text")
+      .map((part) => part.text)
+      .join("");
+    if (!regenerationMode || !regenerationModel || !regenerationText) {
+      setError(new Error("User message is missing content, model, or execution mode"));
+      setStatus("error");
+      return;
+    }
     const assistantId = createId();
     const assistantMessage: Message = {
       id: assistantId,
@@ -295,13 +369,25 @@ export function useChat(sessionId: string, initialMessages: Message[]) {
         {
           method: "POST",
           headers: {
+            "Content-Type": "application/json",
+            "X-OwlCode-Local-Tools": "1",
             ...(auth ? { Authorization: `Bearer ${auth.token}` } : {}),
           },
+          body: JSON.stringify({
+            content: regenerationText,
+            mode: regenerationMode,
+            model: regenerationModel,
+          }),
           signal: abortController.signal,
         },
       );
 
-      await consumeAssistantStream({ response, assistantId, abortController });
+      await consumeAssistantStream({
+        response,
+        assistantId,
+        abortController,
+        mode: regenerationMode,
+      });
     } catch (err) {
       if (abortController.signal.aborted) return;
 

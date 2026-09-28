@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { TextAttributes } from "@opentui/core";
 import { useTheme } from "../../providers/theme";
-import { EmptyBorder } from "../border";
 import { Mode ,type ModeType } from "@owlcode/shared";
 import { copyToClipboard } from "../../lib/clipboard";
 import { useToast } from "../../providers/toast";
@@ -33,34 +32,17 @@ export function UserMessage({message, mode}: Props ) {
     };
 
 return (
-    <box width="100%" alignItems="center">
-    <box
-    border={["left"]}
-    borderColor={mode === Mode.PLAN ?colors.planMode : colors.primary}
-    width="100%"
-     customBorderChars={{
-                    ...EmptyBorder,
-                    vertical: "│",
-                    bottomLeft: "╹"
-                  }}
-    >
-     <box
-     justifyContent="center"
-     paddingX={2}
-     paddingY={1}
-     backgroundColor={colors.surface}
-     width="100%"
-     >
-        <text >{message}</text>
-
+    <box width="100%" paddingX={2} paddingTop={1} paddingBottom={2}>
+     <box flexDirection="row" gap={1} paddingBottom={1}>
+        <text attributes={TextAttributes.BOLD} fg={mode === Mode.PLAN ? colors.planMode : colors.primary}>YOU</text>
+        <text attributes={TextAttributes.DIM} fg={colors.dimSeparator}>›</text>
      </box>
-     <box paddingX={2} paddingBottom={1}>
+     <box width="100%" paddingLeft={2}>
+        <text>{message}</text>
+     </box>
+     <box paddingLeft={2} paddingTop={1}>
         <box
         flexDirection="row"
-        paddingX={1}
-        border={["left", "right"]}
-        borderColor={copied ? colors.success : colors.info}
-        customBorderChars={EmptyBorder}
         onMouseDown={() => {
             void handleCopy();
         }}
@@ -68,15 +50,12 @@ return (
             <text
             selectable={false}
             fg={copied ? colors.success : colors.info}
-            attributes={TextAttributes.BOLD}
+            attributes={TextAttributes.DIM}
             >
-                {copied ? "✓ Message copied" : "Copy message"}
+                {copied ? "✓ Copied" : "Copy message"}
             </text>
         </box>
      </box>
-
-    </box>
-
     </box>
 )
 

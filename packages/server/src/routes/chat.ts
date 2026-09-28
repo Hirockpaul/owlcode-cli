@@ -8,8 +8,9 @@ import{Mode, MessageStatus, } from "@owlcode/database/enums"
 import {  
     type ChatStreamEvent ,
     type MessagePart,
-     toolcallArgsSchema,
-     messagePartsSchema
+    toolcallArgsSchema,
+    messagePartsSchema,
+    clientToolResultSchema,
 } from "@owlcode/shared";
 import { isSupportedChatModel, resolveChatModel } from "../lib/model";
 import type { Prisma } from "@owlcode/database";
@@ -17,6 +18,8 @@ import {createTools} from "../tools"
 import { buildSystemPrompt } from "../../system-prompt";
 import type { AuthenticatedEnv } from "../middleware/require-auth";
 import { randomUUID } from "node:crypto";
+import { createClientToolRun, submitClientToolResult } from "../lib/client-tool-bridge";
+import { getErrorMessage } from "../lib/error-message";
 
 import type { LanguageModelUsage } from "ai";
 import { requireCreditsBalance } from "../middleware/require-credits-balance";
@@ -31,7 +34,19 @@ const  submitSchema = z.object ({
 
 const submitValidator = zValidator("json", submitSchema, (result, c) => {
     if(!result.success) {
-        return c.json({error: "Invalid request body"}, 400);
+        return c.json({
+            error: "Invalid request body",
+            issues: result.error.issues.map((issue) => ({
+                path: issue.path.join("."),
+                message: issue.message,
+            })),
+        }, 400);
+    }
+})
+
+const clientToolResultValidator = zValidator("json", clientToolResultSchema, (result, c) => {
+    if(!result.success) {
+        return c.json({error: "Invalid local tool result"}, 400);
     }
 })
 
@@ -169,6 +184,7 @@ type StreamParams = {
     history: {role: "user" | "assistant" ; content: string} [];
     mode: Mode;
     abortController: AbortController;
+    clientToolsEnabled: boolean;
 }
 
 type IngestUsageForMessageParams = {
@@ -180,9 +196,24 @@ async function streamAIResponse (
      stream: Parameters<Parameters<typeof streamSSE>[1]>[0],
      params: StreamParams,
 ) {
-    const {sessionId, userId, model, history, cwd, mode, abortController} = params;
+    const {
+        sessionId,
+        userId,
+        model,
+        history,
+        cwd,
+        mode,
+        abortController,
+        clientToolsEnabled,
+    } = params;
     const startTime = Date.now();
-    const tools =cwd? createTools(cwd,mode): undefined;
+    const clientToolRun = clientToolsEnabled
+      ? createClientToolRun(userId, sessionId)
+      : null;
+    const tools = clientToolRun
+      ? createTools(mode, ({toolCallId, abortSignal}) =>
+          clientToolRun.waitForResult(toolCallId, abortSignal))
+      : undefined;
     const parts: MessagePart[] = [];
     const resolveModel = resolveChatModel(model);
    let completedUsage: LanguageModelUsage | undefined;
@@ -304,6 +335,7 @@ async function streamAIResponse (
 
                     const event: ChatStreamEvent = {
                         type: "tool-call",
+                        runId: clientToolRun!.runId,
                         toolCallId: part.toolCallId,
                         toolName: part.toolName,
                         args,
@@ -386,7 +418,7 @@ async function streamAIResponse (
             return
         }
 
-        const message = err instanceof Error ? err.message:String(err);
+        const message = getErrorMessage(err);
 
         await appendSessionMessage(sessionId, userId, {
             id: randomUUID(),
@@ -405,10 +437,30 @@ async function streamAIResponse (
 
         const  errorEvent: ChatStreamEvent = {type: "error" , message};
         await stream.writeSSE({event:"error", data: JSON.stringify(errorEvent)}); 
+     } finally {
+        clientToolRun?.close();
      }
 }
 
 const app = new Hono<AuthenticatedEnv>()
+
+  .post("/:sessionId/tool-results", clientToolResultValidator, async (c) => {
+    const sessionId = c.req.param("sessionId");
+    const userId = c.get("userId");
+    const data = c.req.valid("json");
+
+    const accepted = submitClientToolResult({
+      ...data,
+      sessionId,
+      userId,
+    });
+
+    if(!accepted) {
+      return c.json({error: "Local tool call is no longer active"}, 404);
+    }
+
+    return c.json({accepted: true}, 202);
+  })
  
   .post("/:sessionId/regenerate" , requireCreditsBalance, async (c) => {
     const sessionId = c.req.param("sessionId")
@@ -422,10 +474,33 @@ const app = new Hono<AuthenticatedEnv>()
         return c.json({error: "Session not found"},404);
     }
 
-    const sessionMessages = readSessionMessages(session.messages);
-    const latestUserIndex = getLatestUserMessageIndex(sessionMessages);
+    let sessionMessages = readSessionMessages(session.messages);
+    let latestUserIndex = getLatestUserMessageIndex(sessionMessages);
+
     if(latestUserIndex === -1) {
-        return c.json({error: "Session has no user message to regenerate from"},409)
+        const retryPayload = submitSchema.safeParse(
+            await c.req.json().catch(() => null),
+        );
+        if(!retryPayload.success) {
+            return c.json({error: "Session has no user message to regenerate from"},409)
+        }
+
+        const recoveredUserMessage: StoredChatMessage = {
+            id: randomUUID(),
+            role: "user",
+            status: MessageStatus.COMPLETE,
+            model: retryPayload.data.model,
+            content: retryPayload.data.content,
+            parts: [{type: "text", text: retryPayload.data.content}],
+            mode: retryPayload.data.mode,
+            metadata: {
+                mode: retryPayload.data.mode,
+                model: retryPayload.data.model,
+                status: MessageStatus.COMPLETE,
+            },
+        };
+        sessionMessages = [recoveredUserMessage];
+        latestUserIndex = 0;
     }
 
     const userMessage = sessionMessages[latestUserIndex]!;
@@ -475,7 +550,8 @@ const app = new Hono<AuthenticatedEnv>()
                     cwd: getSessionCwd(session),
                     history,
                     mode: regenerateMode,
-                    abortController
+                    abortController,
+                    clientToolsEnabled: c.req.header("X-OwlCode-Local-Tools") === "1",
                 });
             } finally {
                 activeRegenerateSessionIds.delete(sessionId)
@@ -483,7 +559,7 @@ const app = new Hono<AuthenticatedEnv>()
         },
         async (err, stream) => {
             activeRegenerateSessionIds.delete(sessionId)
-            const message = err instanceof Error ? err.message: String(err);
+            const message = getErrorMessage(err);
             const errorEvent: ChatStreamEvent = {type:"error", message};
             await stream.writeSSE({event: "error", data:JSON.stringify(errorEvent)})
         }
@@ -549,7 +625,8 @@ const app = new Hono<AuthenticatedEnv>()
                 cwd: getSessionCwd(session),
                 history,
                 mode: resumableMode,
-                abortController
+                abortController,
+                clientToolsEnabled: c.req.header("X-OwlCode-Local-Tools") === "1",
             });
         } finally {
             activeResumeSessionIds.delete(sessionId)
@@ -557,7 +634,7 @@ const app = new Hono<AuthenticatedEnv>()
         },
         async (err, stream) => {
             activeResumeSessionIds.delete(sessionId)
-            const message = err instanceof Error ? err.message: String(err);
+            const message = getErrorMessage(err);
             const errorEvent: ChatStreamEvent = {type:"error", message};
             await stream.writeSSE({event: "error", data:JSON.stringify(errorEvent)})  
         }
@@ -627,10 +704,11 @@ const app = new Hono<AuthenticatedEnv>()
                 history,
                 mode: data.mode,
                 abortController,
+                clientToolsEnabled: c.req.header("X-OwlCode-Local-Tools") === "1",
             });
         },
         async (err, stream) => {
-            const message = err instanceof Error ? err.message:String(err);
+            const message = getErrorMessage(err);
             const errorEvent: ChatStreamEvent = {type: "error", message};
             await stream.writeSSE({event:"error", data:JSON.stringify(errorEvent)})
         }

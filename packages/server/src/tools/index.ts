@@ -1,28 +1,29 @@
-import type { Mode } from "@owlcode/database/enums";
-import { createReadFileTool } from "./read-file";
-import { createListDirectoryTool } from "./list-directory";
-import { createWriteFileTool } from "./write-file";
-import { createEditFileTool } from "./edit-file";
-import { createGrepTool } from "./grep";
-import { createGlobTool } from "./glob";
-import { createBashTool } from "./bash";
+import { tool } from "ai";
+import { getToolContracts, type ModeType } from "@owlcode/shared";
 
-export function createTools(cwd: string, mode: Mode) {
-  const readOnlyTools = {
-    readFile: createReadFileTool(cwd),
-    listDirectory: createListDirectoryTool(cwd),
-    grep: createGrepTool(cwd),
-    glob: createGlobTool(cwd),
-  };
+type ExecuteClientTool = (params: {
+  toolCallId: string;
+  toolName: string;
+  input: unknown;
+  abortSignal?: AbortSignal;
+}) => Promise<unknown>;
 
-  if (mode === "PLAN") {
-    return readOnlyTools;
-  }
+export function createTools(mode: ModeType, executeClientTool: ExecuteClientTool) {
+  const contracts = getToolContracts(mode);
 
-  return {
-    ...readOnlyTools,
-    writeFile: createWriteFileTool(cwd),
-    editFile: createEditFileTool(cwd),
-    bash: createBashTool(cwd),
-  };
+  return Object.fromEntries(
+    Object.entries(contracts).map(([toolName, contract]) => [
+      toolName,
+      tool({
+        description: contract.description,
+        inputSchema: contract.inputSchema,
+        execute: (input, options) => executeClientTool({
+          toolCallId: options.toolCallId,
+          toolName,
+          input,
+          abortSignal: options.abortSignal,
+        }),
+      }),
+    ]),
+  );
 }

@@ -1,4 +1,4 @@
-import {createContext, useCallback, useContext,  useState} from "react";
+import {createContext, useCallback, useContext, useMemo, useState} from "react";
 import  type {ReactNode} from "react";
 import { TextAttributes, RGBA} from "@opentui/core";
 import {useKeyboard, useTerminalDimensions} from "@opentui/react";
@@ -42,10 +42,10 @@ export function DialogProvider({children} : DialogProviderProps) {
         });
     }, [push, close]);
 
-    const  value: DialogContextValue = {
+    const value = useMemo<DialogContextValue>(() => ({
         open,
         close,
-    };
+    }), [open, close]);
 
     return (
         <DialogContext.Provider value={value}>
@@ -96,7 +96,9 @@ function Dialog({currentDialog, close} : DialogProps) {
             width={Math.min(60, dimensions.width - 4)}
             height="auto"
             backgroundColor={colors.dialogSurface}
-            paddingX={4}
+            border={["top", "bottom", "left", "right"]}
+            borderColor={colors.thinkingBorder}
+            paddingX={2}
             paddingY={1}
             flexDirection="column"
             gap={1}

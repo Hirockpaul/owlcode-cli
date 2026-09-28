@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef } from "react";
 import { useDialog } from "../../providers/dialog";
 import { DialogSearchList } from "../dialog-search-list";
-import { Mode, type SupportedChatModelId } from "@owlcode/shared";
+import { findSupportedChatModel, type SupportedChatModelId } from "@owlcode/shared";
 
 
 type ModelsDialogContentProps = {
@@ -30,10 +30,13 @@ export const ModelsDialogContent = ({
     <DialogSearchList
       items={models}
       onSelect={handleSelect}
-      filterFn={(modelId, query) => modelId.toLowerCase().includes(query.toLowerCase())}
+      filterFn={(modelId, query) => {
+        const model = findSupportedChatModel(modelId);
+        return `${model?.name ?? ""} ${modelId}`.toLowerCase().includes(query.toLowerCase());
+      }}
       renderItem={(modelId, isSelected) => (
         <text selectable ={false} fg = {isSelected ? "black" : "white"}>
-            {modelId}
+            {findSupportedChatModel(modelId)?.name ?? modelId}
         </text>
       )}
       getKey={(modelId) => modelId}

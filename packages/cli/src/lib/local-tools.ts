@@ -1,6 +1,7 @@
-import { mkdir, readFile, readdir, stat, writeFile } from "fs/promises";
+import { mkdir, readFile, readdir, realpath, stat, writeFile } from "fs/promises";
 import { dirname, isAbsolute, join, relative, resolve } from "path";
 import { toolInputSchemas, Mode, type ModeType } from "@owlcode/shared";
+import type { LocalPermissionRequest } from "./local-permissions";
 
 const MAX_FILE_SIZE = 10_000;
 const MAX_RESULTS = 200;
@@ -9,7 +10,7 @@ const MAX_OUTPUT = 20_000;
 const DEFAULT_TIMEOUT = 30_000;
 
 function resolveInsideCwd(path: string) {
-  const cwd = process.cwd();
+  const cwd = getLocalProjectDirectory();
   const resolved = resolve(cwd, path);
   const rel = relative(cwd, resolved);
 
@@ -20,13 +21,55 @@ function resolveInsideCwd(path: string) {
   return { cwd, resolved };
 }
 
+async function assertNoSymlinkEscape(path: string) {
+  const realCwd = await realpath(getLocalProjectDirectory());
+  let candidate = path;
+
+  while (true) {
+    try {
+      const realCandidate = await realpath(candidate);
+      const rel = relative(realCwd, realCandidate);
+      if (rel.startsWith("..") || isAbsolute(rel)) {
+        throw new Error("Path is outside the project directory");
+      }
+      return;
+    } catch (error) {
+      if (!(error instanceof Error) || !("code" in error) || error.code !== "ENOENT") throw error;
+      const parent = dirname(candidate);
+      if (parent === candidate) throw error;
+      candidate = parent;
+    }
+  }
+}
+
+export function getLocalProjectDirectory() {
+  const cwd = process.cwd();
+  return cwd.endsWith("/packages/cli")
+    ? resolve(cwd, "..", "..")
+    : cwd;
+}
+
 function truncate(value: string, limit: number) {
   return value.length > limit
     ? `${value.slice(0, limit)}\n... (truncated, ${value.length} total chars)`
     : value;
 }
 
-export async function executeLocalTool(toolName: string, input: unknown, mode: ModeType) {
+type AuthorizeLocalTool = (request: LocalPermissionRequest) => Promise<boolean>;
+
+async function requirePermission(
+  authorize: AuthorizeLocalTool,
+  request: LocalPermissionRequest,
+) {
+  if (!await authorize(request)) throw new Error("Permission denied by user");
+}
+
+export async function executeLocalTool(
+  toolName: string,
+  input: unknown,
+  mode: ModeType,
+  authorize: AuthorizeLocalTool,
+) {
   if (mode === Mode.PLAN && !["readFile", "listDirectory", "glob", "grep"].includes(toolName)) {
     throw new Error(`Tool ${toolName} is not available in PLAN mode`);
   }
@@ -35,6 +78,8 @@ export async function executeLocalTool(toolName: string, input: unknown, mode: M
     case "readFile": {
       const { path } = toolInputSchemas.readFile.parse(input);
       const { resolved } = resolveInsideCwd(path);
+      await requirePermission(authorize, { access: "read", path: dirname(resolved) });
+      await assertNoSymlinkEscape(resolved);
       const content = await readFile(resolved, "utf-8");
       return content.length > MAX_FILE_SIZE
         ? { content: content.slice(0, MAX_FILE_SIZE), truncated: true, totalLength: content.length }
@@ -43,6 +88,8 @@ export async function executeLocalTool(toolName: string, input: unknown, mode: M
     case "listDirectory": {
       const { path } = toolInputSchemas.listDirectory.parse(input);
       const { cwd, resolved } = resolveInsideCwd(path);
+      await requirePermission(authorize, { access: "read", path: resolved });
+      await assertNoSymlinkEscape(resolved);
       const entries = await readdir(resolved);
       const results: { name: string; type: "file" | "directory" }[] = [];
 
@@ -60,6 +107,8 @@ export async function executeLocalTool(toolName: string, input: unknown, mode: M
     case "glob": {
       const { pattern, path } = toolInputSchemas.glob.parse(input);
       const { cwd, resolved } = resolveInsideCwd(path);
+      await requirePermission(authorize, { access: "read", path: resolved });
+      await assertNoSymlinkEscape(resolved);
       const glob = new Bun.Glob(pattern);
       const files: string[] = [];
       let truncated = false;
@@ -79,6 +128,8 @@ export async function executeLocalTool(toolName: string, input: unknown, mode: M
     case "grep": {
       const { pattern, path, include } = toolInputSchemas.grep.parse(input);
       const { cwd, resolved } = resolveInsideCwd(path);
+      await requirePermission(authorize, { access: "read", path: resolved });
+      await assertNoSymlinkEscape(resolved);
       const args = [
         "-rn",
         "--color=never",
@@ -123,6 +174,8 @@ export async function executeLocalTool(toolName: string, input: unknown, mode: M
     case "writeFile": {
       const { path, content } = toolInputSchemas.writeFile.parse(input);
       const { cwd, resolved } = resolveInsideCwd(path);
+      await requirePermission(authorize, { access: "write", path: dirname(resolved) });
+      await assertNoSymlinkEscape(dirname(resolved));
       await mkdir(dirname(resolved), { recursive: true });
       await writeFile(resolved, content, "utf-8");
       return {
@@ -134,6 +187,8 @@ export async function executeLocalTool(toolName: string, input: unknown, mode: M
     case "editFile": {
       const { path, oldString, newString } = toolInputSchemas.editFile.parse(input);
       const { cwd, resolved } = resolveInsideCwd(path);
+      await requirePermission(authorize, { access: "write", path: dirname(resolved) });
+      await assertNoSymlinkEscape(resolved);
       const content = await readFile(resolved, "utf-8");
       const occurrences = content.split(oldString).length - 1;
 
@@ -145,8 +200,10 @@ export async function executeLocalTool(toolName: string, input: unknown, mode: M
     }
     case "bash": {
       const { command, timeout = DEFAULT_TIMEOUT } = toolInputSchemas.bash.parse(input);
+      const projectDirectory = resolveInsideCwd(".").resolved;
+      await requirePermission(authorize, { access: "execute", path: projectDirectory });
       const proc = Bun.spawn(["bash", "-c", command], {
-        cwd: resolveInsideCwd(".").resolved,
+        cwd: projectDirectory,
         stdout: "pipe",
         stderr: "pipe",
         env: { ...process.env, TERM: "dumb" },

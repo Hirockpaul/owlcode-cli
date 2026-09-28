@@ -44,6 +44,7 @@ export const chatStreamEventSchema = z.discriminatedUnion("type", [
   }),
   z.object({
     type: z.literal("tool-call"),
+    runId: z.string(),
     toolCallId: z.string(),
     toolName: z.string(),
     args: toolcallArgsSchema,
@@ -64,7 +65,14 @@ export const chatStreamEventSchema = z.discriminatedUnion("type", [
   }),
 ]);
 
+export const clientToolResultSchema = z.object({
+  runId: z.string(),
+  toolCallId: z.string(),
+  result: z.unknown(),
+});
+
 export type ChatStreamEvent = z.infer<typeof chatStreamEventSchema>;
+export type ClientToolResult = z.infer<typeof clientToolResultSchema>;
 
 export const toolInputSchemas = {
   readFile: z.object({

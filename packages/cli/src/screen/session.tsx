@@ -126,6 +126,7 @@ function SessionChat({
       onSubmit={(text) => submit({ userText: text, mode, model })}
       loading={status === "submitted" || status === "streaming"}
       interruptible={status === "submitted" || status === "streaming"}
+      followStreaming={status === "streaming"}
     >
       {messages.map((msg, index) => {
         const isLastMessage = index === messages.length - 1;

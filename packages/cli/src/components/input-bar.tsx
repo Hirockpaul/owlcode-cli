@@ -9,7 +9,6 @@ import type { TextareaRenderable, ScrollBoxRenderable } from "@opentui/core";
 import { useKeyboard, useRenderer } from "@opentui/react";
 import type { KeyBinding } from "@opentui/core";
 import { useNavigate } from "react-router";
-import { EmptyBorder } from "./border";
 import { StatusBar } from "./status_bar";
 import { CommandMenu } from "./command-menu";
 import type { Command } from "./command-menu/types";
@@ -20,11 +19,11 @@ import { useDialog } from "../providers/dialog";
 import { useTheme } from "../providers/theme";
 import { usePromptConfig } from "../providers/prompt-config";
 import { Mode } from "@owlcode/shared";
+import { AgentsDialogContent } from "./dialogs";
+import { getLocalProjectDirectory } from "../lib/local-tools";
 
 const MAX_VISIBLE_MENTIONS = 8;
-const CURRENT_DIRECTORY = process.cwd().endsWith("/packages/cli")
-  ? resolve(process.cwd(), "..", "..")
-  : process.cwd();
+const CURRENT_DIRECTORY = getLocalProjectDirectory();
 const MAX_FALLBACK_MENTION_CANDIDATES = 32;
 const MENTION_QUERY_CHARACTER = /[A-Za-z0-9._/-]/;
 const RECURSIVE_MENTION_IGNORED_DIRECTORIES = new Set(["node_modules"]);
@@ -273,7 +272,7 @@ export const TEXTAREA_KEY_BINDINGS: KeyBinding[] = [
 ];
 
 export function InputBar({ onSubmit, disabled = false, onLogin }: Props) {
-  const { mode, toggleMode, setMode, setModel } = usePromptConfig();
+  const { mode, setMode, setModel } = usePromptConfig();
   const textareaRef = useRef<TextareaRenderable>(null);
   const onSubmitRef = useRef<() => void>(() => {});
   const activeMentionRef = useRef<MentionMatch | null>(null);
@@ -480,7 +479,10 @@ export function InputBar({ onSubmit, disabled = false, onLogin }: Props) {
     if (!isTopLayer("base")) return;
     if (key.name === "tab") {
       key.preventDefault();
-      toggleMode();
+      dialog.open({
+        title: "Agents",
+        children: <AgentsDialogContent currentMode={mode} onSelectMode={setMode} />,
+      });
     }
   });
 
@@ -543,20 +545,15 @@ export function InputBar({ onSubmit, disabled = false, onLogin }: Props) {
   return (
     <box width="100%" alignItems="center">
       <box
-        border={["left"]}
+        border={["top", "bottom", "left", "right"]}
         borderColor={mode === Mode.BUILD ? colors.primary : colors.planMode}
-        customBorderChars={{
-          ...EmptyBorder,
-          vertical: "┃",
-          bottomLeft: "╹",
-        }}
         width="100%"
       >
         <box
           position="relative"
           justifyContent="center"
           paddingX={2}
-          paddingY={1}
+          paddingY={0}
           backgroundColor={colors.surface}
           width="100%"
           gap={1}
@@ -605,9 +602,18 @@ export function InputBar({ onSubmit, disabled = false, onLogin }: Props) {
             }
             keyBindings={TEXTAREA_KEY_BINDINGS}
             onContentChange={handleTextareaContentChange}
-            placeholder={`Ask anything... "Fix a bug in the database"`}
+            placeholder="› Ask anything..."
           />
           <StatusBar />
+          <box flexDirection="row" gap={1}>
+            <text attributes={TextAttributes.DIM}>Enter send</text>
+            <text attributes={TextAttributes.DIM} fg={colors.dimSeparator}>·</text>
+            <text attributes={TextAttributes.DIM}>Shift+Enter newline</text>
+            <text attributes={TextAttributes.DIM} fg={colors.dimSeparator}>·</text>
+            <text attributes={TextAttributes.DIM}>/ commands</text>
+            <text attributes={TextAttributes.DIM} fg={colors.dimSeparator}>·</text>
+            <text attributes={TextAttributes.DIM}>@ files</text>
+          </box>
         </box>
       </box>
     </box>

@@ -15,6 +15,7 @@ A powerful terminal-based AI coding assistant with support for multiple AI model
 - **Multi-Model Support**
   - Google AI (Gemini)
   - Groq AI
+  - NVIDIA NIM (Nemotron 3 Ultra)
   - Extensible architecture for additional providers
 
 - **Rich Terminal UI**
@@ -42,7 +43,7 @@ A powerful terminal-based AI coding assistant with support for multiple AI model
 - **PostgreSQL** — Database backend
 - **Clerk** account — Authentication provider
 - **Polar** account — Billing and subscription management
-- **API Keys** — Google and Groq AI provider keys
+- **API Keys** — Google, Groq, and/or NVIDIA AI provider keys
 
 ## Installation
 
@@ -208,6 +209,7 @@ docker run -e DATABASE_URL=<url> -e CLERK_SECRET_KEY=<key> ... -p 3000:3000 owlc
 - `OWLCODE_PUBLIC_API_URL` (the public HTTPS URL of this API)
 - `GOOGLE_GENERATIVE_AI_API_KEY`
 - `GROQ_API_KEY`
+- `NVIDIA_API_KEY` (server-only; required for NVIDIA Nemotron 3 Ultra)
 - `POLAR_ACCESS_TOKEN`
 - `PORT`
 

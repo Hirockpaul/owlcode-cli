@@ -18,7 +18,9 @@ export function buildSystemPrompt({
   - **BUILD** — Full implementation with read and write tools.`);
 
   if (cwd) {
-    parts.push(`\nThe user's project directory is: ${cwd}`);
+    parts.push(`
+The user's project is available through the provided tools, which run inside the user's local CLI.
+Always pass project-relative paths to filesystem tools. Do not pass or infer absolute server paths.`);
   }
 
   if (mode === "PLAN") {
