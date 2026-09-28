@@ -52,6 +52,21 @@ echo "Building OwlCode CLI releases with Bun $(bun --version)..."
 rm -rf -- "${DIST_DIR}"
 mkdir -p -- "${DIST_DIR}"
 
+worker_dist="${DIST_DIR}/worker"
+mkdir -p -- "${worker_dist}"
+bun build "${REPO_ROOT}/packages/cli/node_modules/@opentui/core/parser.worker.js" \
+  --target=node \
+  --outdir="${worker_dist}" \
+  --entry-naming=owlcode-parser.worker.js \
+  --asset-naming=tree-sitter.wasm
+
+for runtime_file in owlcode-parser.worker.js tree-sitter.wasm; do
+  if [[ ! -s "${worker_dist}/${runtime_file}" ]]; then
+    echo "Error: expected syntax-highlighting runtime was not created: ${runtime_file}" >&2
+    exit 1
+  fi
+done
+
 labels=(
   "Linux x64"
   "Linux ARM64"
@@ -107,6 +122,9 @@ for index in "${!targets[@]}"; do
     chmod +x -- "${output}"
   fi
 
+  cp -- "${worker_dist}/owlcode-parser.worker.js" "${staging_dir}/owlcode-parser.worker.js"
+  cp -- "${worker_dist}/tree-sitter.wasm" "${staging_dir}/tree-sitter.wasm"
+
   echo "✓ ${label}"
 done
 
@@ -123,6 +141,7 @@ if [[ -n "${host_binary}" && "$(uname -s)" == "Linux" ]]; then
     echo "Error: --version returned '${version_output}', expected 'OwlCode v${VERSION}'" >&2
     exit 1
   fi
+  "${host_binary}" --check-syntax-highlighting
   echo "Verified host CLI: ${version_output}"
 else
   echo "Error: release verification requires a Linux x64 or ARM64 runner." >&2
@@ -130,14 +149,14 @@ else
 fi
 
 echo "Packaging release archives..."
-tar -czf "${DIST_DIR}/${archives[0]}" -C "${DIST_DIR}/staging/${targets[0]}" "${outputs[0]}"
-tar -czf "${DIST_DIR}/${archives[1]}" -C "${DIST_DIR}/staging/${targets[1]}" "${outputs[1]}"
+tar -czf "${DIST_DIR}/${archives[0]}" -C "${DIST_DIR}/staging/${targets[0]}" "${outputs[0]}" owlcode-parser.worker.js tree-sitter.wasm
+tar -czf "${DIST_DIR}/${archives[1]}" -C "${DIST_DIR}/staging/${targets[1]}" "${outputs[1]}" owlcode-parser.worker.js tree-sitter.wasm
 (
   cd -- "${DIST_DIR}/staging/${targets[2]}"
-  zip -q "${DIST_DIR}/${archives[2]}" "${outputs[2]}"
+  zip -q "${DIST_DIR}/${archives[2]}" "${outputs[2]}" owlcode-parser.worker.js tree-sitter.wasm
 )
-tar -czf "${DIST_DIR}/${archives[3]}" -C "${DIST_DIR}/staging/${targets[3]}" "${outputs[3]}"
-tar -czf "${DIST_DIR}/${archives[4]}" -C "${DIST_DIR}/staging/${targets[4]}" "${outputs[4]}"
+tar -czf "${DIST_DIR}/${archives[3]}" -C "${DIST_DIR}/staging/${targets[3]}" "${outputs[3]}" owlcode-parser.worker.js tree-sitter.wasm
+tar -czf "${DIST_DIR}/${archives[4]}" -C "${DIST_DIR}/staging/${targets[4]}" "${outputs[4]}" owlcode-parser.worker.js tree-sitter.wasm
 
 for archive in "${archives[@]}"; do
   if [[ ! -s "${DIST_DIR}/${archive}" ]]; then

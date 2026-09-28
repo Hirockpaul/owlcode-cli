@@ -97,13 +97,15 @@ PY
 mkdir "$tmp_dir/extracted"
 if [[ "$os" == "windows" ]]; then
   need unzip
-  [[ "$(unzip -Z1 "$tmp_dir/$filename" | wc -l | tr -d '[:space:]')" == "1" ]] && unzip -Z1 "$tmp_dir/$filename" | grep -Fxq "owlcode.exe" || die "archive must contain only owlcode.exe"
+  archive_entries="$(unzip -Z1 "$tmp_dir/$filename" | sort)"
+  [[ "$archive_entries" == $'owlcode-parser.worker.js\nowlcode.exe\ntree-sitter.wasm' ]] || die "archive contains unexpected files"
   unzip -q "$tmp_dir/$filename" -d "$tmp_dir/extracted"
   binary="$tmp_dir/extracted/owlcode.exe"
   target_name="owlcode.exe"
 else
   need tar
-  [[ "$(tar -tzf "$tmp_dir/$filename" | wc -l | tr -d '[:space:]')" == "1" ]] && tar -tzf "$tmp_dir/$filename" | grep -Fxq "owlcode" || die "archive must contain only owlcode"
+  archive_entries="$(tar -tzf "$tmp_dir/$filename" | sort)"
+  [[ "$archive_entries" == $'owlcode\nowlcode-parser.worker.js\ntree-sitter.wasm' ]] || die "archive contains unexpected files"
   tar -xzf "$tmp_dir/$filename" -C "$tmp_dir/extracted"
   binary="$tmp_dir/extracted/owlcode"
   target_name="owlcode"
@@ -120,4 +122,6 @@ temporary_target="$install_dir/.${target_name}.new.$$"
 install -m 755 "$binary" "$temporary_target"
 [[ ! -e "$target" ]] || mv -f -- "$target" "$target.previous"
 mv -f -- "$temporary_target" "$target"
+install -m 644 "$tmp_dir/extracted/owlcode-parser.worker.js" "$install_dir/owlcode-parser.worker.js"
+install -m 644 "$tmp_dir/extracted/tree-sitter.wasm" "$install_dir/tree-sitter.wasm"
 echo "Installed ${actual_version} at ${target}"
