@@ -8,6 +8,7 @@ import { NewSession } from "./screen/new-session";
 import { Session } from "./screen/session";
 import { initializeConfig } from "./lib/env";
 import { refreshApiClient } from "./lib/api-client";
+import { updateOwlCode } from "./lib/update";
 
 const router = createMemoryRouter([
   {
@@ -25,7 +26,16 @@ function App() {
   return <RouterProvider router={router} />
 }
 
-if (process.argv.includes("--version")) {
+if (process.argv[2] === "update") {
+  try {
+    const exitCode = await updateOwlCode();
+    if (exitCode !== 0) process.exit(exitCode);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`Update failed: ${message}`);
+    process.exit(1);
+  }
+} else if (process.argv.includes("--version")) {
   console.log(`OwlCode v${packageMetadata.version}`);
 } else {
   await initializeConfig();

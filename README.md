@@ -53,6 +53,15 @@ A powerful terminal-based AI coding assistant with support for multiple AI model
    bun install
    ```
 
+### Update an installed CLI
+
+```bash
+owlcode update
+```
+
+The updater installs the latest signed release and preserves the user's OwlCode
+configuration and authentication data.
+
 2. **Initialize the database**
    ```bash
    bun run --cwd packages/database db:push
