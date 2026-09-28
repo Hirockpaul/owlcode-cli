@@ -9,8 +9,8 @@
         
     },
     "scripts": {
-        "db:generate": "bunx prisma generate",
-        "db:push": "bunx prisma db push"
+        "db:generate": "bun --bun run prisma generate",
+        "db:push": "bun --bun run prisma db push"
     },
     "devDependencies": {
         "@types/node": "^26.0.0",
