@@ -14,6 +14,12 @@ import { openBillingPortal, openUpgradeCheckout } from "../../lib/upgrade";
 export const COMMANDS: Command[] = [
 
   {
+    name: "search",
+    description: "Search the public web",
+    value: "/search",
+  },
+
+  {
         name: "new",
         description: "Start a new conversation",
         value: "/new",

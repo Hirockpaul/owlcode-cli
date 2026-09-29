@@ -14,7 +14,7 @@ import {
 } from "@owlcode/shared";
 import { isSupportedChatModel, resolveChatModel } from "../lib/model";
 import type { Prisma } from "@owlcode/database";
-import {createTools} from "../tools"
+import {createTools, getSlashWebTool, isClientTool} from "../tools"
 import { buildSystemPrompt } from "../../system-prompt";
 import type { AuthenticatedEnv } from "../middleware/require-auth";
 import { randomUUID } from "node:crypto";
@@ -210,10 +210,10 @@ async function streamAIResponse (
     const clientToolRun = clientToolsEnabled
       ? createClientToolRun(userId, sessionId)
       : null;
-    const tools = clientToolRun
-      ? createTools(mode, ({toolCallId, abortSignal}) =>
-          clientToolRun.waitForResult(toolCallId, abortSignal))
-      : undefined;
+    const tools = createTools(mode, clientToolRun
+      ? ({toolCallId, abortSignal}) => clientToolRun.waitForResult(toolCallId, abortSignal)
+      : undefined);
+    const explicitWebTool = getSlashWebTool(history.at(-1)?.content ?? "");
     const parts: MessagePart[] = [];
     const resolveModel = resolveChatModel(model);
    let completedUsage: LanguageModelUsage | undefined;
@@ -286,7 +286,12 @@ async function streamAIResponse (
             system: buildSystemPrompt({cwd,mode}),
             messages: history,
             tools,
-            stopWhen: tools ? stepCountIs(50) : undefined,
+            stopWhen: stepCountIs(50),
+            prepareStep: explicitWebTool
+              ? ({stepNumber}) => stepNumber === 0
+                ? {toolChoice: {type: "tool" as const, toolName: explicitWebTool}}
+                : {toolChoice: "auto" as const}
+              : undefined,
             abortSignal: abortController.signal,
             providerOptions: resolveModel.providerOptions,
             onFinish(event) {
@@ -325,6 +330,7 @@ async function streamAIResponse (
               
             if(part.type === "tool-call") {
                 const args = toolcallArgsSchema.parse(part.input);
+                const clientExecuted = isClientTool(part.toolName, mode);
 
                 parts.push({
                     type: "tool-call",
@@ -335,10 +341,11 @@ async function streamAIResponse (
 
                     const event: ChatStreamEvent = {
                         type: "tool-call",
-                        runId: clientToolRun!.runId,
+                        ...(clientExecuted && clientToolRun ? {runId: clientToolRun.runId} : {}),
                         toolCallId: part.toolCallId,
                         toolName: part.toolName,
                         args,
+                        execution: clientExecuted ? "client" : "server",
                     };
                     await stream.writeSSE({event: "tool-call", data: JSON.stringify(event)});
             }

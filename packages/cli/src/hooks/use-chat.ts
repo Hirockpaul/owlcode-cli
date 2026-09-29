@@ -119,6 +119,8 @@ export function useChat(sessionId: string, initialMessages: Message[]) {
       const toolTasks: Promise<void>[] = [];
 
       const executeToolCall = async (event: Extract<ChatStreamEvent, {type: "tool-call"}>) => {
+        if (event.execution === "server") return;
+        if (!event.runId) throw new Error("Local tool call is missing its run identifier");
         let result: unknown;
         try {
           result = await executeLocalTool(event.toolName, event.args, mode, (request) =>
