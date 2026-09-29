@@ -43,7 +43,7 @@ jobs:
       FORCE_RELEASE: ${{ github.event_name == 'workflow_dispatch' && inputs.force && 'true' || 'false' }}
       CONFIRM_RELEASE_TAG: ${{ inputs.confirm_release_tag || '' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           ref: ${{ github.event_name == 'workflow_dispatch' && format('refs/tags/{0}', inputs.release_tag) || github.ref }}
 
@@ -191,7 +191,7 @@ jobs:
           printf '%s\n' "${RELEASE_TAG#v}" > dist/version.txt
 
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v6
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
